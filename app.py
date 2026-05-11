@@ -118,7 +118,12 @@ def extract_domain(url: str) -> str:
         domain = parsed.netloc or parsed.path.split("/")[0]
         return domain.replace("www.", "")
     except Exception:
-        return url.replace("https://", "").replace("http://", "").replace("www.", "").split("/")[0]
+        return (
+            url.replace("https://", "")
+            .replace("http://", "")
+            .replace("www.", "")
+            .split("/")[0]
+        )
 
 
 def render_html(raw_html: str) -> None:
@@ -133,8 +138,8 @@ def render_html(raw_html: str) -> None:
 
 def validate_table_name(table_name: str) -> str:
     """
-    Very small safety check for env-provided table names.
-    Supports catalog.schema.table style names.
+    Small safety check for env-provided Unity Catalog table names.
+    Supports catalog.schema.table format.
     """
     name = safe_str(table_name).strip()
     if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*){0,2}$", name):
@@ -173,6 +178,7 @@ def get_server_hostname(cfg: Config) -> str:
 
 def get_connection():
     http_path = get_http_path()
+
     if not http_path:
         st.error(
             "Databricks SQL warehouse is not configured. "
@@ -197,6 +203,7 @@ def get_connection():
 def query_df(query: str, params: List = None) -> pd.DataFrame:
     conn = get_connection()
     cursor = None
+
     try:
         cursor = conn.cursor()
         cursor.execute(query, parameters=params or [])
@@ -214,6 +221,7 @@ def query_df(query: str, params: List = None) -> pd.DataFrame:
 def execute_sql(query: str, params: List = None) -> None:
     conn = get_connection()
     cursor = None
+
     try:
         cursor = conn.cursor()
         cursor.execute(query, parameters=params or [])
@@ -284,6 +292,7 @@ def load_queue() -> pd.DataFrame:
         FROM {QUEUE_TABLE}
         ORDER BY review_sequence
     """
+
     df = query_df(query)
 
     if df.empty:
@@ -294,7 +303,10 @@ def load_queue() -> pd.DataFrame:
 
     if "review_sequence" in df.columns:
         df["review_sequence_num"] = pd.to_numeric(df["review_sequence"], errors="coerce")
-        df = df.sort_values(["review_sequence_num", "PublisherKey"], na_position="last").reset_index(drop=True)
+        df = (
+            df.sort_values(["review_sequence_num", "PublisherKey"], na_position="last")
+            .reset_index(drop=True)
+        )
 
     return df
 
@@ -305,6 +317,7 @@ def load_decisions() -> pd.DataFrame:
         SELECT *
         FROM {DECISIONS_TABLE}
     """
+
     try:
         df = query_df(query)
     except Exception:
@@ -324,6 +337,9 @@ def decision_key(df: pd.DataFrame) -> pd.Series:
 
 
 def get_unreviewed_queue(queue_df: pd.DataFrame, decisions_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Removes already-reviewed publishers from the active review queue.
+    """
     if queue_df.empty:
         return queue_df
 
@@ -334,7 +350,146 @@ def get_unreviewed_queue(queue_df: pd.DataFrame, decisions_df: pd.DataFrame) -> 
     q = queue_df.copy()
     q["_decision_key"] = decision_key(q)
 
-    return q[~q["_decision_key"].isin(reviewed_keys)].drop(columns=["_decision_key"]).reset_index(drop=True)
+    return (
+        q[~q["_decision_key"].isin(reviewed_keys)]
+        .drop(columns=["_decision_key"])
+        .reset_index(drop=True)
+    )
+
+
+# ============================================================
+# Decision configuration
+# ============================================================
+
+REASON_OPTIONS = {
+    "creator": [
+        ("Creator / personal brand", "creator_individual_or_creator_brand"),
+        ("Social profile evidence", "creator_individual_or_creator_brand"),
+        ("UGC / product review creator", "creator_individual_or_creator_brand"),
+        ("Creator-commerce / affiliate", "creator_individual_or_creator_brand"),
+        ("Other creator evidence", "other"),
+    ],
+    "not_creator": [
+        ("Business / company", "business_or_company"),
+        ("Agency / network", "agency_or_network"),
+        ("Media / editorial publisher", "publisher_or_media"),
+        ("Utility or non-creator site", "utility_or_non_creator"),
+        ("Not enough creator evidence", "insufficient_information"),
+        ("Other", "other"),
+    ],
+    "unsure": [
+        ("Missing or weak website", "insufficient_information"),
+        ("Missing or weak description", "insufficient_information"),
+        ("Conflicting signals", "insufficient_information"),
+        ("Needs manual escalation", "insufficient_information"),
+        ("Other", "other"),
+    ],
+}
+
+DECISION_DISPLAY = {
+    "creator": {
+        "title": "Creator",
+        "subtitle": "You think this publisher belongs in the Influencer / Content Creator cluster.",
+        "reviewed_cluster_label": "belongs",
+    },
+    "not_creator": {
+        "title": "Not creator",
+        "subtitle": "You think this publisher does not belong in the Influencer / Content Creator cluster.",
+        "reviewed_cluster_label": "does_not_belong",
+    },
+    "unsure": {
+        "title": "Unsure",
+        "subtitle": "There is not enough evidence to make a confident decision.",
+        "reviewed_cluster_label": "unsure",
+    },
+}
+
+
+def infer_review_outcome(decision_type: str, row: pd.Series) -> str:
+    current_cluster = parse_bool(row.get("signal_current_cluster", False))
+
+    if decision_type == "creator":
+        return "accepted_current_cluster" if current_cluster else "add_to_cluster"
+
+    if decision_type == "not_creator":
+        return "remove_from_cluster" if current_cluster else "unclear"
+
+    return "unclear"
+
+
+def set_pending_decision(decision_type: str) -> None:
+    st.session_state.pending_decision = decision_type
+    st.session_state.reason_choice = None
+    st.session_state.review_comment = ""
+
+
+def clear_pending_decision() -> None:
+    st.session_state.pending_decision = None
+    st.session_state.reason_choice = None
+    st.session_state.review_comment = ""
+
+
+# ============================================================
+# Card navigation
+# ============================================================
+
+def init_card_navigation() -> None:
+    if "card_idx" not in st.session_state:
+        st.session_state.card_idx = 0
+
+
+def clamp_card_index(total_cards: int) -> None:
+    if total_cards <= 0:
+        st.session_state.card_idx = 0
+        return
+
+    st.session_state.card_idx = max(
+        0,
+        min(int(st.session_state.card_idx), total_cards - 1),
+    )
+
+
+def handle_navigation_query_params(total_cards: int) -> None:
+    """
+    Handles card browsing using query params from the HTML arrow links.
+    """
+    if total_cards <= 0:
+        return
+
+    params = st.query_params
+
+    if "idx" in params:
+        try:
+            requested_idx = int(params.get("idx", 0))
+            st.session_state.card_idx = max(0, min(requested_idx, total_cards - 1))
+        except Exception:
+            st.session_state.card_idx = 0
+
+        st.query_params.clear()
+        st.rerun()
+
+
+def handle_decision_query_params(current_row: pd.Series) -> None:
+    """
+    Handles coloured HTML decision links.
+    """
+    params = st.query_params
+
+    if "decision" not in params:
+        return
+
+    decision_type = safe_str(params.get("decision", "")).strip()
+    publisher_key_from_url = safe_str(params.get("pk", "")).strip()
+    current_publisher_key = safe_str(current_row.get("PublisherKey", "")).strip()
+
+    if (
+        decision_type in DECISION_DISPLAY
+        and publisher_key_from_url == current_publisher_key
+    ):
+        set_pending_decision(decision_type)
+
+    st.query_params.clear()
+    st.rerun()
 
 
 # ============================================================
@@ -537,7 +692,7 @@ def inject_css() -> None:
         }
 
         .block-container {
-            max-width: 1180px !important;
+            max-width: 1220px !important;
             padding-top: 0.3rem !important;
             padding-bottom: 0.8rem !important;
             padding-left: 1.5rem !important;
@@ -628,10 +783,58 @@ def inject_css() -> None:
             box-shadow: 0 0 18px rgba(34, 211, 238, 0.32);
         }
 
+        /* Review stage */
+        .review-stage {
+            display: grid;
+            grid-template-columns: 72px minmax(0, 760px) 72px;
+            align-items: center;
+            justify-content: center;
+            gap: 18px;
+            margin: 0 auto 0.65rem auto;
+        }
+
+        .side-nav {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .side-arrow {
+            width: 58px;
+            height: 58px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            text-decoration: none !important;
+            font-size: 2.1rem;
+            font-weight: 900;
+            color: #E0F2FE !important;
+            background:
+                radial-gradient(circle at 30% 20%, rgba(96,165,250,0.22), transparent 45%),
+                rgba(15, 23, 42, 0.82);
+            border: 1px solid rgba(147,197,253,0.20);
+            box-shadow: 0 14px 38px rgba(0,0,0,0.26);
+            transition: all 0.18s ease;
+        }
+
+        .side-arrow:hover {
+            transform: translateY(-2px) scale(1.03);
+            border-color: rgba(96,165,250,0.65);
+            box-shadow: 0 18px 46px rgba(37,99,235,0.22);
+            color: #FFFFFF !important;
+        }
+
+        .side-arrow-disabled {
+            opacity: 0.22;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
         /* Flashcard */
         .flashcard-wrap {
-            max-width: 720px;
-            margin: 0 auto 0.65rem auto;
+            max-width: 760px;
+            margin: 0 auto;
         }
 
         .flashcard {
@@ -837,10 +1040,96 @@ def inject_css() -> None:
             font-weight: 700;
         }
 
-        /* Decision area */
-        .decision-zone {
-            max-width: 960px;
-            margin: 0.8rem auto 0.2rem auto;
+        /* Swipe action buttons */
+        .swipe-actions {
+            max-width: 1020px;
+            margin: 1rem auto 0.35rem auto;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 16px;
+        }
+
+        .swipe-btn {
+            min-height: 68px;
+            border-radius: 22px;
+            padding: 12px 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            text-decoration: none !important;
+            font-weight: 900;
+            border: 1px solid transparent;
+            box-shadow:
+                0 16px 42px rgba(0,0,0,0.26),
+                inset 0 1px 0 rgba(255,255,255,0.08);
+            transition: all 0.18s ease;
+        }
+
+        .swipe-btn strong {
+            display: block;
+            font-size: 1rem;
+            line-height: 1.1;
+            color: inherit;
+        }
+
+        .swipe-btn small {
+            display: block;
+            margin-top: 4px;
+            font-size: 0.72rem;
+            font-weight: 750;
+            opacity: 0.86;
+            color: inherit;
+        }
+
+        .swipe-icon {
+            font-size: 1.45rem;
+            line-height: 1;
+        }
+
+        .swipe-reject {
+            background:
+                radial-gradient(circle at 20% 20%, rgba(248,113,113,0.28), transparent 42%),
+                linear-gradient(135deg, rgba(127,29,29,0.90), rgba(69,10,10,0.90));
+            color: #FEE2E2 !important;
+            border-color: rgba(248,113,113,0.32);
+        }
+
+        .swipe-reject:hover {
+            transform: translateY(-2px);
+            color: #FFFFFF !important;
+            border-color: rgba(252,165,165,0.70);
+            box-shadow: 0 20px 48px rgba(220,38,38,0.28);
+        }
+
+        .swipe-unsure {
+            background:
+                radial-gradient(circle at 20% 20%, rgba(251,191,36,0.30), transparent 42%),
+                linear-gradient(135deg, rgba(120,53,15,0.92), rgba(69,26,3,0.92));
+            color: #FEF3C7 !important;
+            border-color: rgba(251,191,36,0.34);
+        }
+
+        .swipe-unsure:hover {
+            transform: translateY(-2px);
+            color: #FFFFFF !important;
+            border-color: rgba(253,224,71,0.72);
+            box-shadow: 0 20px 48px rgba(245,158,11,0.25);
+        }
+
+        .swipe-accept {
+            background:
+                radial-gradient(circle at 20% 20%, rgba(45,212,191,0.28), transparent 42%),
+                linear-gradient(135deg, rgba(6,95,70,0.92), rgba(20,83,45,0.92));
+            color: #CCFBF1 !important;
+            border-color: rgba(45,212,191,0.34);
+        }
+
+        .swipe-accept:hover {
+            transform: translateY(-2px);
+            color: #FFFFFF !important;
+            border-color: rgba(94,234,212,0.72);
+            box-shadow: 0 20px 48px rgba(20,184,166,0.25);
         }
 
         .decision-help {
@@ -910,13 +1199,7 @@ def inject_css() -> None:
             border-radius: 14px !important;
         }
 
-        /* Hide dataframe/table from default reviewer mode if accidentally rendered */
-        div[data-testid="stDataFrame"] {
-            border-radius: 14px !important;
-            overflow: hidden !important;
-        }
-
-        @media (max-width: 820px) {
+        @media (max-width: 900px) {
             .topbar {
                 flex-direction: column;
                 align-items: flex-start;
@@ -931,12 +1214,28 @@ def inject_css() -> None:
                 width: 260px;
             }
 
+            .review-stage {
+                grid-template-columns: 44px minmax(0, 1fr) 44px;
+                gap: 8px;
+            }
+
+            .side-arrow {
+                width: 42px;
+                height: 42px;
+                font-size: 1.55rem;
+            }
+
             .publisher-title {
                 font-size: 1.45rem;
             }
 
             .card-footer-grid {
                 grid-template-columns: 1fr;
+            }
+
+            .swipe-actions {
+                grid-template-columns: 1fr;
+                gap: 10px;
             }
         }
         </style>
@@ -951,25 +1250,34 @@ def inject_css() -> None:
 
 def bucket_chip_class(bucket: str) -> str:
     bucket = safe_str(bucket)
+
     if bucket in {"p1_current_cluster_strong", "p3_hidden_positive_strong"}:
         return "chip-green"
+
     if bucket in {"p2_current_cluster", "p4_hidden_positive"}:
         return "chip-blue"
+
     if bucket in {"p5_adjacent_supported", "p6_social_and_keyword"}:
         return "chip-amber"
+
     return "chip-slate"
 
 
 def confidence_chip_class(confidence: str) -> str:
     confidence = safe_str(confidence)
+
     if confidence == "likely_creator":
         return "chip-green"
+
     if confidence == "possible_creator":
         return "chip-blue"
+
     if confidence == "creator_commercial_business_like":
         return "chip-amber"
+
     if confidence == "likely_not_creator":
         return "chip-red"
+
     return "chip-slate"
 
 
@@ -996,7 +1304,13 @@ def render_topbar(reviewer: Dict[str, str], reviewed: int, total: int) -> None:
     )
 
 
-def render_flashcard(row: pd.Series, position: int, remaining: int) -> None:
+def render_flashcard(
+    row: pd.Series,
+    position: int,
+    remaining: int,
+    card_idx: int,
+    total_cards: int,
+) -> None:
     publisher = esc(row.get("Publisher", "Unknown publisher"))
     website = normalise_url(row.get("PublisherWebSite", ""))
     domain = esc(extract_domain(website))
@@ -1016,6 +1330,21 @@ def render_flashcard(row: pd.Series, position: int, remaining: int) -> None:
     creator_score = safe_float_str(row.get("creator_evidence_score", ""))
     risk_score = safe_float_str(row.get("non_creator_risk_score", ""))
 
+    prev_idx = max(card_idx - 1, 0)
+    next_idx = min(card_idx + 1, total_cards - 1)
+
+    prev_arrow = (
+        f'<a class="side-arrow" href="?idx={prev_idx}" title="Previous publisher">‹</a>'
+        if card_idx > 0
+        else '<span class="side-arrow side-arrow-disabled">‹</span>'
+    )
+
+    next_arrow = (
+        f'<a class="side-arrow" href="?idx={next_idx}" title="Next publisher">›</a>'
+        if card_idx < total_cards - 1
+        else '<span class="side-arrow side-arrow-disabled">›</span>'
+    )
+
     site_html = (
         f'<a href="{esc(website)}" target="_blank">{domain or esc(website)}</a>'
         if website
@@ -1024,36 +1353,42 @@ def render_flashcard(row: pd.Series, position: int, remaining: int) -> None:
 
     render_html(
         f"""
-        <div class="flashcard-wrap">
-            <div class="flashcard">
-                <div class="flashcard-kicker">Card {position} · {remaining} remaining</div>
+        <div class="review-stage">
+            <div class="side-nav">{prev_arrow}</div>
 
-                <div class="chips">
-                    <span class="chip {bucket_chip_class(bucket)}">{bucket_label}</span>
-                    <span class="chip {confidence_chip_class(confidence_raw)}">{confidence_label}</span>
-                    <span class="chip chip-slate">Website: {website_type}</span>
-                </div>
+            <div class="flashcard-wrap">
+                <div class="flashcard">
+                    <div class="flashcard-kicker">Card {card_idx + 1} of {total_cards} unreviewed · {remaining} remaining</div>
 
-                <div class="publisher-title">{publisher}</div>
-                <div class="publisher-site">{site_html}</div>
-
-                <div class="description-card">{description}</div>
-
-                <div class="card-footer-grid">
-                    <div class="mini-stat">
-                        <div class="mini-stat-label">Current type</div>
-                        <div class="mini-stat-value">{current_type}</div>
+                    <div class="chips">
+                        <span class="chip {bucket_chip_class(bucket)}">{bucket_label}</span>
+                        <span class="chip {confidence_chip_class(confidence_raw)}">{confidence_label}</span>
+                        <span class="chip chip-slate">Website: {website_type}</span>
                     </div>
-                    <div class="mini-stat">
-                        <div class="mini-stat-label">Current subvertical</div>
-                        <div class="mini-stat-value">{current_subvertical}</div>
-                    </div>
-                    <div class="mini-stat">
-                        <div class="mini-stat-label">Evidence / risk</div>
-                        <div class="mini-stat-value">{creator_score} / {risk_score}</div>
+
+                    <div class="publisher-title">{publisher}</div>
+                    <div class="publisher-site">{site_html}</div>
+
+                    <div class="description-card">{description}</div>
+
+                    <div class="card-footer-grid">
+                        <div class="mini-stat">
+                            <div class="mini-stat-label">Current type</div>
+                            <div class="mini-stat-value">{current_type}</div>
+                        </div>
+                        <div class="mini-stat">
+                            <div class="mini-stat-label">Current subvertical</div>
+                            <div class="mini-stat-value">{current_subvertical}</div>
+                        </div>
+                        <div class="mini-stat">
+                            <div class="mini-stat-label">Evidence / risk</div>
+                            <div class="mini-stat-value">{creator_score} / {risk_score}</div>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            <div class="side-nav">{next_arrow}</div>
         </div>
         """
     )
@@ -1112,108 +1447,49 @@ def render_completion_state(reviewer: Dict[str, str], total: int) -> None:
     st.success("All publishers in this review batch have been reviewed.")
     st.markdown(
         """
-        The first review batch is complete. You can now analyse the captured decisions in the Delta decisions table
-        and the joined review results view.
+        The first review batch is complete. You can now analyse the captured decisions
+        in the Delta decisions table and the joined review results view.
         """
     )
 
 
 # ============================================================
-# Decision logic
+# Decision UI
 # ============================================================
 
-REASON_OPTIONS = {
-    "creator": [
-        ("Creator / personal brand", "creator_individual_or_creator_brand"),
-        ("Social profile evidence", "creator_individual_or_creator_brand"),
-        ("UGC / product review creator", "creator_individual_or_creator_brand"),
-        ("Creator-commerce / affiliate", "creator_individual_or_creator_brand"),
-        ("Other creator evidence", "other"),
-    ],
-    "not_creator": [
-        ("Business / company", "business_or_company"),
-        ("Agency / network", "agency_or_network"),
-        ("Media / editorial publisher", "publisher_or_media"),
-        ("Utility or non-creator site", "utility_or_non_creator"),
-        ("Not enough creator evidence", "insufficient_information"),
-        ("Other", "other"),
-    ],
-    "unsure": [
-        ("Missing or weak website", "insufficient_information"),
-        ("Missing or weak description", "insufficient_information"),
-        ("Conflicting signals", "insufficient_information"),
-        ("Needs manual escalation", "insufficient_information"),
-        ("Other", "other"),
-    ],
-}
-
-DECISION_DISPLAY = {
-    "creator": {
-        "title": "Creator",
-        "subtitle": "You think this publisher belongs in the Influencer / Content Creator cluster.",
-        "reviewed_cluster_label": "belongs",
-    },
-    "not_creator": {
-        "title": "Not creator",
-        "subtitle": "You think this publisher does not belong in the Influencer / Content Creator cluster.",
-        "reviewed_cluster_label": "does_not_belong",
-    },
-    "unsure": {
-        "title": "Unsure",
-        "subtitle": "There is not enough evidence to make a confident decision.",
-        "reviewed_cluster_label": "unsure",
-    },
-}
-
-
-def infer_review_outcome(decision_type: str, row: pd.Series) -> str:
-    current_cluster = parse_bool(row.get("signal_current_cluster", False))
-
-    if decision_type == "creator":
-        return "accepted_current_cluster" if current_cluster else "add_to_cluster"
-
-    if decision_type == "not_creator":
-        return "remove_from_cluster" if current_cluster else "unclear"
-
-    return "unclear"
-
-
-def set_pending_decision(decision_type: str) -> None:
-    st.session_state.pending_decision = decision_type
-    st.session_state.reason_choice = None
-    st.session_state.review_comment = ""
-
-
-def clear_pending_decision() -> None:
-    st.session_state.pending_decision = None
-    st.session_state.reason_choice = None
-    st.session_state.review_comment = ""
-
-
-def render_decision_buttons() -> None:
-    render_html('<div class="decision-zone">')
-    left, middle, right = st.columns(3)
-
-    with left:
-        if st.button("← Not creator", use_container_width=True):
-            set_pending_decision("not_creator")
-            st.rerun()
-
-    with middle:
-        if st.button("Unsure", use_container_width=True):
-            set_pending_decision("unsure")
-            st.rerun()
-
-    with right:
-        if st.button("Creator →", use_container_width=True):
-            set_pending_decision("creator")
-            st.rerun()
+def render_decision_buttons(row: pd.Series) -> None:
+    publisher_key = esc(row.get("PublisherKey", ""))
 
     render_html(
-        """
-        <div class="decision-help">
-            Choose the simplest accurate decision. You can add a quick reason next.
+        f"""
+        <div class="swipe-actions">
+            <a class="swipe-btn swipe-reject" href="?decision=not_creator&pk={publisher_key}">
+                <span class="swipe-icon">←</span>
+                <span>
+                    <strong>Not creator</strong>
+                    <small>Remove / exclude</small>
+                </span>
+            </a>
+
+            <a class="swipe-btn swipe-unsure" href="?decision=unsure&pk={publisher_key}">
+                <span class="swipe-icon">?</span>
+                <span>
+                    <strong>Unsure</strong>
+                    <small>Needs judgement</small>
+                </span>
+            </a>
+
+            <a class="swipe-btn swipe-accept" href="?decision=creator&pk={publisher_key}">
+                <span>
+                    <strong>Creator</strong>
+                    <small>Keep / add</small>
+                </span>
+                <span class="swipe-icon">→</span>
+            </a>
         </div>
+
+        <div class="decision-help">
+            Browse freely with the side arrows. Choose a decision only when you are ready.
         </div>
         """
     )
@@ -1238,59 +1514,58 @@ def render_decision_panel(row: pd.Series, reviewer: Dict[str, str]) -> None:
         """
     )
 
-    with st.container():
-        selected_reason_label = st.radio(
-            "Reason",
-            reason_labels,
-            index=0,
-            horizontal=True,
-            key=f"reason_radio_{safe_str(row.get('PublisherKey'))}_{decision_type}",
-        )
+    selected_reason_label = st.radio(
+        "Reason",
+        reason_labels,
+        index=0,
+        horizontal=True,
+        key=f"reason_radio_{safe_str(row.get('PublisherKey'))}_{decision_type}",
+    )
 
-        comment = st.text_area(
-            "Optional comment",
-            placeholder="Add a note only if this case is ambiguous, misleading, or useful for future model improvement.",
-            height=90,
-            key=f"comment_{safe_str(row.get('PublisherKey'))}_{decision_type}",
-        )
+    comment = st.text_area(
+        "Optional comment",
+        placeholder="Add a note only if this case is ambiguous, misleading, or useful for future model improvement.",
+        height=90,
+        key=f"comment_{safe_str(row.get('PublisherKey'))}_{decision_type}",
+    )
 
-        save_col, cancel_col = st.columns([3, 1])
+    save_col, cancel_col = st.columns([3, 1])
 
-        with save_col:
-            if st.button("Save decision & next", type="primary", use_container_width=True):
-                reason_category = dict(reason_options)[selected_reason_label]
+    with save_col:
+        if st.button("Save decision & next", type="primary", use_container_width=True):
+            reason_category = dict(reason_options)[selected_reason_label]
 
-                decision = {
-                    "review_batch_id": safe_str(row.get("review_batch_id", "")),
-                    "PublisherKey": safe_str(row.get("PublisherKey", "")),
-                    "reviewed_cluster_label": config["reviewed_cluster_label"],
-                    "review_outcome": infer_review_outcome(decision_type, row),
-                    "review_reason_category": reason_category,
-                    "review_reason_detail": selected_reason_label,
-                    "review_comment": comment.strip(),
-                    "reviewer_name": reviewer["reviewer_name"],
-                    "reviewer_email": reviewer["reviewer_email"],
-                    "decision_source": DECISION_SOURCE,
-                    "review_sequence": safe_int(row.get("review_sequence", 0)),
-                    "priority_bucket": safe_str(row.get("priority_bucket", "")),
-                    "review_confidence_hint": safe_str(row.get("review_confidence_hint", "")),
-                    "creator_evidence_score": safe_int(row.get("creator_evidence_score", 0)),
-                    "non_creator_risk_score": safe_int(row.get("non_creator_risk_score", 0)),
-                }
+            decision = {
+                "review_batch_id": safe_str(row.get("review_batch_id", "")),
+                "PublisherKey": safe_str(row.get("PublisherKey", "")),
+                "reviewed_cluster_label": config["reviewed_cluster_label"],
+                "review_outcome": infer_review_outcome(decision_type, row),
+                "review_reason_category": reason_category,
+                "review_reason_detail": selected_reason_label,
+                "review_comment": comment.strip(),
+                "reviewer_name": reviewer["reviewer_name"],
+                "reviewer_email": reviewer["reviewer_email"],
+                "decision_source": DECISION_SOURCE,
+                "review_sequence": safe_int(row.get("review_sequence", 0)),
+                "priority_bucket": safe_str(row.get("priority_bucket", "")),
+                "review_confidence_hint": safe_str(row.get("review_confidence_hint", "")),
+                "creator_evidence_score": safe_int(row.get("creator_evidence_score", 0)),
+                "non_creator_risk_score": safe_int(row.get("non_creator_risk_score", 0)),
+            }
 
-                ok, msg = save_decision_to_delta(decision)
+            ok, msg = save_decision_to_delta(decision)
 
-                if ok:
-                    clear_pending_decision()
-                    st.success("Saved. Loading next publisher...")
-                    st.rerun()
-                else:
-                    st.error(msg)
-
-        with cancel_col:
-            if st.button("Cancel", use_container_width=True):
+            if ok:
                 clear_pending_decision()
+                st.success("Saved. Loading next publisher...")
                 st.rerun()
+            else:
+                st.error(msg)
+
+    with cancel_col:
+        if st.button("Cancel", use_container_width=True):
+            clear_pending_decision()
+            st.rerun()
 
 
 # ============================================================
@@ -1330,6 +1605,8 @@ def main() -> None:
     if "pending_decision" not in st.session_state:
         st.session_state.pending_decision = None
 
+    init_card_navigation()
+
     reviewer = get_authenticated_reviewer()
 
     with st.spinner("Loading review queue..."):
@@ -1353,19 +1630,29 @@ def main() -> None:
         render_completion_state(reviewer, total_rows)
         return
 
-    current_row = unreviewed_df.iloc[0]
+    handle_navigation_query_params(remaining_rows)
+    clamp_card_index(remaining_rows)
 
-    position = total_rows - remaining_rows + 1
+    current_row = unreviewed_df.iloc[st.session_state.card_idx]
+
+    handle_decision_query_params(current_row)
 
     render_topbar(reviewer, reviewed_rows, total_rows)
-    render_flashcard(current_row, position=position, remaining=remaining_rows)
+
+    render_flashcard(
+        current_row,
+        position=st.session_state.card_idx + 1,
+        remaining=remaining_rows,
+        card_idx=st.session_state.card_idx,
+        total_cards=remaining_rows,
+    )
 
     with st.expander("Why this publisher is in the queue", expanded=False):
         render_reviewer_context_panel(current_row)
 
     render_debug_context(current_row)
 
-    render_decision_buttons()
+    render_decision_buttons(current_row)
     render_decision_panel(current_row, reviewer)
 
     with st.expander("Reviewer guide", expanded=False):
@@ -1379,7 +1666,7 @@ def main() -> None:
 
             **Choose Unsure** when the evidence is not strong enough or the signals conflict.
 
-            The evidence shown in the card is there to help you, but your business judgement is the final decision.
+            You can browse publishers using the side arrows before making a decision.
             """
         )
 
