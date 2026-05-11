@@ -127,20 +127,12 @@ def extract_domain(url: str) -> str:
 
 
 def render_html(raw_html: str) -> None:
-    """
-    Renders compact HTML safely in Streamlit without markdown treating
-    indented HTML as a code block.
-    """
     cleaned = dedent(raw_html).strip()
     cleaned = "\n".join(line.strip() for line in cleaned.splitlines())
     st.markdown(cleaned, unsafe_allow_html=True)
 
 
 def validate_table_name(table_name: str) -> str:
-    """
-    Small safety check for env-provided Unity Catalog table names.
-    Supports catalog.schema.table format.
-    """
     name = safe_str(table_name).strip()
     if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*){0,2}$", name):
         st.error(f"Invalid table name configured: {name}")
@@ -238,11 +230,6 @@ def execute_sql(query: str, params: List = None) -> None:
 # ============================================================
 
 def get_authenticated_reviewer() -> Dict[str, str]:
-    """
-    Attempts to read reviewer identity from Databricks Apps / proxy headers.
-    Falls back to local/dev identity if headers are unavailable.
-    """
-
     raw_headers = {}
     try:
         raw_headers = dict(getattr(st.context, "headers", {}) or {})
@@ -337,9 +324,6 @@ def decision_key(df: pd.DataFrame) -> pd.Series:
 
 
 def get_unreviewed_queue(queue_df: pd.DataFrame, decisions_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Removes already-reviewed publishers from the active review queue.
-    """
     if queue_df.empty:
         return queue_df
 
@@ -449,47 +433,22 @@ def clamp_card_index(total_cards: int) -> None:
     )
 
 
-def handle_navigation_query_params(total_cards: int) -> None:
-    """
-    Handles card browsing using query params from the HTML arrow links.
-    """
+def go_previous_card(total_cards: int) -> None:
     if total_cards <= 0:
+        st.session_state.card_idx = 0
         return
 
-    params = st.query_params
-
-    if "idx" in params:
-        try:
-            requested_idx = int(params.get("idx", 0))
-            st.session_state.card_idx = max(0, min(requested_idx, total_cards - 1))
-        except Exception:
-            st.session_state.card_idx = 0
-
-        st.query_params.clear()
-        st.rerun()
+    st.session_state.card_idx = max(0, st.session_state.card_idx - 1)
+    clear_pending_decision()
 
 
-def handle_decision_query_params(current_row: pd.Series) -> None:
-    """
-    Handles coloured HTML decision links.
-    """
-    params = st.query_params
-
-    if "decision" not in params:
+def go_next_card(total_cards: int) -> None:
+    if total_cards <= 0:
+        st.session_state.card_idx = 0
         return
 
-    decision_type = safe_str(params.get("decision", "")).strip()
-    publisher_key_from_url = safe_str(params.get("pk", "")).strip()
-    current_publisher_key = safe_str(current_row.get("PublisherKey", "")).strip()
-
-    if (
-        decision_type in DECISION_DISPLAY
-        and publisher_key_from_url == current_publisher_key
-    ):
-        set_pending_decision(decision_type)
-
-    st.query_params.clear()
-    st.rerun()
+    st.session_state.card_idx = min(total_cards - 1, st.session_state.card_idx + 1)
+    clear_pending_decision()
 
 
 # ============================================================
@@ -497,12 +456,6 @@ def handle_decision_query_params(current_row: pd.Series) -> None:
 # ============================================================
 
 def save_decision_to_delta(decision: Dict) -> Tuple[bool, str]:
-    """
-    One decision per review_batch_id + PublisherKey.
-    Same reviewer can update their own decision.
-    Other reviewers cannot overwrite it.
-    """
-
     existing_query = f"""
         SELECT
             reviewer_email,
@@ -647,7 +600,6 @@ def inject_css() -> None:
     st.markdown(
         """
         <style>
-        /* Hide Streamlit default chrome */
         header[data-testid="stHeader"] {
             display: none !important;
             height: 0 !important;
@@ -670,7 +622,6 @@ def inject_css() -> None:
             height: 0 !important;
         }
 
-        /* Global app background */
         html, body, [data-testid="stAppViewContainer"] {
             background:
                 radial-gradient(circle at 18% 4%, rgba(91, 140, 255, 0.20), transparent 26%),
@@ -712,7 +663,6 @@ def inject_css() -> None:
             color: inherit;
         }
 
-        /* Topbar */
         .topbar {
             display: flex;
             justify-content: space-between;
@@ -783,55 +733,6 @@ def inject_css() -> None:
             box-shadow: 0 0 18px rgba(34, 211, 238, 0.32);
         }
 
-        /* Review stage */
-        .review-stage {
-            display: grid;
-            grid-template-columns: 72px minmax(0, 760px) 72px;
-            align-items: center;
-            justify-content: center;
-            gap: 18px;
-            margin: 0 auto 0.65rem auto;
-        }
-
-        .side-nav {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .side-arrow {
-            width: 58px;
-            height: 58px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 999px;
-            text-decoration: none !important;
-            font-size: 2.1rem;
-            font-weight: 900;
-            color: #E0F2FE !important;
-            background:
-                radial-gradient(circle at 30% 20%, rgba(96,165,250,0.22), transparent 45%),
-                rgba(15, 23, 42, 0.82);
-            border: 1px solid rgba(147,197,253,0.20);
-            box-shadow: 0 14px 38px rgba(0,0,0,0.26);
-            transition: all 0.18s ease;
-        }
-
-        .side-arrow:hover {
-            transform: translateY(-2px) scale(1.03);
-            border-color: rgba(96,165,250,0.65);
-            box-shadow: 0 18px 46px rgba(37,99,235,0.22);
-            color: #FFFFFF !important;
-        }
-
-        .side-arrow-disabled {
-            opacity: 0.22;
-            cursor: not-allowed;
-            box-shadow: none;
-        }
-
-        /* Flashcard */
         .flashcard-wrap {
             max-width: 760px;
             margin: 0 auto;
@@ -850,6 +751,18 @@ def inject_css() -> None:
                 0 18px 54px rgba(0,0,0,0.34),
                 inset 0 1px 0 rgba(255,255,255,0.05);
             min-height: 370px;
+            animation: cardFadeIn 0.22s ease-out;
+        }
+
+        @keyframes cardFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px) scale(0.995);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
         }
 
         .flashcard-kicker {
@@ -979,7 +892,6 @@ def inject_css() -> None:
             line-height: 1.25;
         }
 
-        /* Context expander */
         div[data-testid="stExpander"] {
             max-width: 900px;
             margin: 0.4rem auto 0 auto;
@@ -1040,98 +952,6 @@ def inject_css() -> None:
             font-weight: 700;
         }
 
-        /* Swipe action buttons */
-        .swipe-actions {
-            max-width: 1020px;
-            margin: 1rem auto 0.35rem auto;
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 16px;
-        }
-
-        .swipe-btn {
-            min-height: 68px;
-            border-radius: 22px;
-            padding: 12px 18px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 14px;
-            text-decoration: none !important;
-            font-weight: 900;
-            border: 1px solid transparent;
-            box-shadow:
-                0 16px 42px rgba(0,0,0,0.26),
-                inset 0 1px 0 rgba(255,255,255,0.08);
-            transition: all 0.18s ease;
-        }
-
-        .swipe-btn strong {
-            display: block;
-            font-size: 1rem;
-            line-height: 1.1;
-            color: inherit;
-        }
-
-        .swipe-btn small {
-            display: block;
-            margin-top: 4px;
-            font-size: 0.72rem;
-            font-weight: 750;
-            opacity: 0.86;
-            color: inherit;
-        }
-
-        .swipe-icon {
-            font-size: 1.45rem;
-            line-height: 1;
-        }
-
-        .swipe-reject {
-            background:
-                radial-gradient(circle at 20% 20%, rgba(248,113,113,0.28), transparent 42%),
-                linear-gradient(135deg, rgba(127,29,29,0.90), rgba(69,10,10,0.90));
-            color: #FEE2E2 !important;
-            border-color: rgba(248,113,113,0.32);
-        }
-
-        .swipe-reject:hover {
-            transform: translateY(-2px);
-            color: #FFFFFF !important;
-            border-color: rgba(252,165,165,0.70);
-            box-shadow: 0 20px 48px rgba(220,38,38,0.28);
-        }
-
-        .swipe-unsure {
-            background:
-                radial-gradient(circle at 20% 20%, rgba(251,191,36,0.30), transparent 42%),
-                linear-gradient(135deg, rgba(120,53,15,0.92), rgba(69,26,3,0.92));
-            color: #FEF3C7 !important;
-            border-color: rgba(251,191,36,0.34);
-        }
-
-        .swipe-unsure:hover {
-            transform: translateY(-2px);
-            color: #FFFFFF !important;
-            border-color: rgba(253,224,71,0.72);
-            box-shadow: 0 20px 48px rgba(245,158,11,0.25);
-        }
-
-        .swipe-accept {
-            background:
-                radial-gradient(circle at 20% 20%, rgba(45,212,191,0.28), transparent 42%),
-                linear-gradient(135deg, rgba(6,95,70,0.92), rgba(20,83,45,0.92));
-            color: #CCFBF1 !important;
-            border-color: rgba(45,212,191,0.34);
-        }
-
-        .swipe-accept:hover {
-            transform: translateY(-2px);
-            color: #FFFFFF !important;
-            border-color: rgba(94,234,212,0.72);
-            box-shadow: 0 20px 48px rgba(20,184,166,0.25);
-        }
-
         .decision-help {
             text-align: center;
             color: #CBD5E1;
@@ -1162,7 +982,6 @@ def inject_css() -> None:
             margin-bottom: 10px;
         }
 
-        /* Streamlit widgets */
         .stButton > button {
             background: rgba(15, 23, 42, 0.78) !important;
             color: #F8FAFC !important;
@@ -1178,6 +997,88 @@ def inject_css() -> None:
             background: rgba(30, 41, 59, 0.92) !important;
             color: #FFFFFF !important;
             transform: translateY(-1px);
+        }
+
+        .st-key-prev_card_button button,
+        .st-key-next_card_button button {
+            width: 58px !important;
+            height: 58px !important;
+            min-height: 58px !important;
+            border-radius: 999px !important;
+            font-size: 2rem !important;
+            font-weight: 950 !important;
+            padding: 0 !important;
+            background:
+                radial-gradient(circle at 30% 20%, rgba(96,165,250,0.22), transparent 45%),
+                rgba(15, 23, 42, 0.82) !important;
+            border: 1px solid rgba(147,197,253,0.24) !important;
+            color: #E0F2FE !important;
+            box-shadow: 0 14px 38px rgba(0,0,0,0.26) !important;
+        }
+
+        .st-key-prev_card_button button:hover,
+        .st-key-next_card_button button:hover {
+            transform: translateY(-2px) scale(1.03);
+            border-color: rgba(96,165,250,0.65) !important;
+            color: #FFFFFF !important;
+        }
+
+        .st-key-decision_not_creator button {
+            background:
+                radial-gradient(circle at 20% 20%, rgba(248,113,113,0.28), transparent 42%),
+                linear-gradient(135deg, rgba(127,29,29,0.92), rgba(69,10,10,0.92)) !important;
+            color: #FEE2E2 !important;
+            border-color: rgba(248,113,113,0.38) !important;
+            min-height: 68px !important;
+            border-radius: 22px !important;
+            font-size: 1rem !important;
+        }
+
+        .st-key-decision_not_creator button:hover {
+            color: #FFFFFF !important;
+            border-color: rgba(252,165,165,0.78) !important;
+            box-shadow: 0 20px 48px rgba(220,38,38,0.28) !important;
+        }
+
+        .st-key-decision_unsure button {
+            background:
+                radial-gradient(circle at 20% 20%, rgba(251,191,36,0.30), transparent 42%),
+                linear-gradient(135deg, rgba(120,53,15,0.92), rgba(69,26,3,0.92)) !important;
+            color: #FEF3C7 !important;
+            border-color: rgba(251,191,36,0.42) !important;
+            min-height: 68px !important;
+            border-radius: 22px !important;
+            font-size: 1rem !important;
+        }
+
+        .st-key-decision_unsure button:hover {
+            color: #FFFFFF !important;
+            border-color: rgba(253,224,71,0.78) !important;
+            box-shadow: 0 20px 48px rgba(245,158,11,0.25) !important;
+        }
+
+        .st-key-decision_creator button {
+            background:
+                radial-gradient(circle at 20% 20%, rgba(45,212,191,0.28), transparent 42%),
+                linear-gradient(135deg, rgba(6,95,70,0.92), rgba(20,83,45,0.92)) !important;
+            color: #CCFBF1 !important;
+            border-color: rgba(45,212,191,0.42) !important;
+            min-height: 68px !important;
+            border-radius: 22px !important;
+            font-size: 1rem !important;
+        }
+
+        .st-key-decision_creator button:hover {
+            color: #FFFFFF !important;
+            border-color: rgba(94,234,212,0.78) !important;
+            box-shadow: 0 20px 48px rgba(20,184,166,0.25) !important;
+        }
+
+        .st-key-save_decision_button button {
+            background:
+                linear-gradient(135deg, rgba(37,99,235,0.95), rgba(20,184,166,0.88)) !important;
+            color: #FFFFFF !important;
+            border-color: rgba(147,197,253,0.42) !important;
         }
 
         input, textarea, select {
@@ -1214,17 +1115,6 @@ def inject_css() -> None:
                 width: 260px;
             }
 
-            .review-stage {
-                grid-template-columns: 44px minmax(0, 1fr) 44px;
-                gap: 8px;
-            }
-
-            .side-arrow {
-                width: 42px;
-                height: 42px;
-                font-size: 1.55rem;
-            }
-
             .publisher-title {
                 font-size: 1.45rem;
             }
@@ -1233,9 +1123,12 @@ def inject_css() -> None:
                 grid-template-columns: 1fr;
             }
 
-            .swipe-actions {
-                grid-template-columns: 1fr;
-                gap: 10px;
+            .st-key-prev_card_button button,
+            .st-key-next_card_button button {
+                width: 42px !important;
+                height: 42px !important;
+                min-height: 42px !important;
+                font-size: 1.55rem !important;
             }
         }
         </style>
@@ -1306,7 +1199,6 @@ def render_topbar(reviewer: Dict[str, str], reviewed: int, total: int) -> None:
 
 def render_flashcard(
     row: pd.Series,
-    position: int,
     remaining: int,
     card_idx: int,
     total_cards: int,
@@ -1330,21 +1222,6 @@ def render_flashcard(
     creator_score = safe_float_str(row.get("creator_evidence_score", ""))
     risk_score = safe_float_str(row.get("non_creator_risk_score", ""))
 
-    prev_idx = max(card_idx - 1, 0)
-    next_idx = min(card_idx + 1, total_cards - 1)
-
-    prev_arrow = (
-        f'<a class="side-arrow" href="?idx={prev_idx}" title="Previous publisher">‹</a>'
-        if card_idx > 0
-        else '<span class="side-arrow side-arrow-disabled">‹</span>'
-    )
-
-    next_arrow = (
-        f'<a class="side-arrow" href="?idx={next_idx}" title="Next publisher">›</a>'
-        if card_idx < total_cards - 1
-        else '<span class="side-arrow side-arrow-disabled">›</span>'
-    )
-
     site_html = (
         f'<a href="{esc(website)}" target="_blank">{domain or esc(website)}</a>'
         if website
@@ -1353,45 +1230,77 @@ def render_flashcard(
 
     render_html(
         f"""
-        <div class="review-stage">
-            <div class="side-nav">{prev_arrow}</div>
+        <div class="flashcard-wrap">
+            <div class="flashcard">
+                <div class="flashcard-kicker">Card {card_idx + 1} of {total_cards} unreviewed · {remaining} remaining</div>
 
-            <div class="flashcard-wrap">
-                <div class="flashcard">
-                    <div class="flashcard-kicker">Card {card_idx + 1} of {total_cards} unreviewed · {remaining} remaining</div>
+                <div class="chips">
+                    <span class="chip {bucket_chip_class(bucket)}">{bucket_label}</span>
+                    <span class="chip {confidence_chip_class(confidence_raw)}">{confidence_label}</span>
+                    <span class="chip chip-slate">Website: {website_type}</span>
+                </div>
 
-                    <div class="chips">
-                        <span class="chip {bucket_chip_class(bucket)}">{bucket_label}</span>
-                        <span class="chip {confidence_chip_class(confidence_raw)}">{confidence_label}</span>
-                        <span class="chip chip-slate">Website: {website_type}</span>
+                <div class="publisher-title">{publisher}</div>
+                <div class="publisher-site">{site_html}</div>
+
+                <div class="description-card">{description}</div>
+
+                <div class="card-footer-grid">
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">Current type</div>
+                        <div class="mini-stat-value">{current_type}</div>
                     </div>
-
-                    <div class="publisher-title">{publisher}</div>
-                    <div class="publisher-site">{site_html}</div>
-
-                    <div class="description-card">{description}</div>
-
-                    <div class="card-footer-grid">
-                        <div class="mini-stat">
-                            <div class="mini-stat-label">Current type</div>
-                            <div class="mini-stat-value">{current_type}</div>
-                        </div>
-                        <div class="mini-stat">
-                            <div class="mini-stat-label">Current subvertical</div>
-                            <div class="mini-stat-value">{current_subvertical}</div>
-                        </div>
-                        <div class="mini-stat">
-                            <div class="mini-stat-label">Evidence / risk</div>
-                            <div class="mini-stat-value">{creator_score} / {risk_score}</div>
-                        </div>
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">Current subvertical</div>
+                        <div class="mini-stat-value">{current_subvertical}</div>
+                    </div>
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">Evidence / risk</div>
+                        <div class="mini-stat-value">{creator_score} / {risk_score}</div>
                     </div>
                 </div>
             </div>
-
-            <div class="side-nav">{next_arrow}</div>
         </div>
         """
     )
+
+
+def render_review_stage(
+    current_row: pd.Series,
+    remaining_rows: int,
+    total_cards: int,
+) -> None:
+    left_col, card_col, right_col = st.columns([0.08, 0.84, 0.08])
+
+    with left_col:
+        st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
+        if st.button(
+            "‹",
+            key="prev_card_button",
+            disabled=st.session_state.card_idx <= 0,
+            use_container_width=True,
+        ):
+            go_previous_card(total_cards)
+            st.rerun()
+
+    with card_col:
+        render_flashcard(
+            current_row,
+            remaining=remaining_rows,
+            card_idx=st.session_state.card_idx,
+            total_cards=total_cards,
+        )
+
+    with right_col:
+        st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
+        if st.button(
+            "›",
+            key="next_card_button",
+            disabled=st.session_state.card_idx >= total_cards - 1,
+            use_container_width=True,
+        ):
+            go_next_card(total_cards)
+            st.rerun()
 
 
 def render_reviewer_context_panel(row: pd.Series) -> None:
@@ -1457,42 +1366,28 @@ def render_completion_state(reviewer: Dict[str, str], total: int) -> None:
 # Decision UI
 # ============================================================
 
-def render_decision_buttons(row: pd.Series) -> None:
-    publisher_key = esc(row.get("PublisherKey", ""))
-
-    render_html(
-        f"""
-        <div class="swipe-actions">
-            <a class="swipe-btn swipe-reject" href="?decision=not_creator&pk={publisher_key}">
-                <span class="swipe-icon">←</span>
-                <span>
-                    <strong>Not creator</strong>
-                    <small>Remove / exclude</small>
-                </span>
-            </a>
-
-            <a class="swipe-btn swipe-unsure" href="?decision=unsure&pk={publisher_key}">
-                <span class="swipe-icon">?</span>
-                <span>
-                    <strong>Unsure</strong>
-                    <small>Needs judgement</small>
-                </span>
-            </a>
-
-            <a class="swipe-btn swipe-accept" href="?decision=creator&pk={publisher_key}">
-                <span>
-                    <strong>Creator</strong>
-                    <small>Keep / add</small>
-                </span>
-                <span class="swipe-icon">→</span>
-            </a>
-        </div>
-
-        <div class="decision-help">
-            Browse freely with the side arrows. Choose a decision only when you are ready.
-        </div>
-        """
+def render_decision_buttons() -> None:
+    st.markdown(
+        '<div class="decision-help">Browse freely with the side arrows. Choose a decision only when you are ready.</div>',
+        unsafe_allow_html=True,
     )
+
+    left, middle, right = st.columns(3)
+
+    with left:
+        if st.button("← Not creator\n\nRemove / exclude", key="decision_not_creator", use_container_width=True):
+            set_pending_decision("not_creator")
+            st.rerun()
+
+    with middle:
+        if st.button("Unsure\n\nNeeds judgement", key="decision_unsure", use_container_width=True):
+            set_pending_decision("unsure")
+            st.rerun()
+
+    with right:
+        if st.button("Creator →\n\nKeep / add", key="decision_creator", use_container_width=True):
+            set_pending_decision("creator")
+            st.rerun()
 
 
 def render_decision_panel(row: pd.Series, reviewer: Dict[str, str]) -> None:
@@ -1532,7 +1427,7 @@ def render_decision_panel(row: pd.Series, reviewer: Dict[str, str]) -> None:
     save_col, cancel_col = st.columns([3, 1])
 
     with save_col:
-        if st.button("Save decision & next", type="primary", use_container_width=True):
+        if st.button("Save decision & next", type="primary", key="save_decision_button", use_container_width=True):
             reason_category = dict(reason_options)[selected_reason_label]
 
             decision = {
@@ -1563,7 +1458,7 @@ def render_decision_panel(row: pd.Series, reviewer: Dict[str, str]) -> None:
                 st.error(msg)
 
     with cancel_col:
-        if st.button("Cancel", use_container_width=True):
+        if st.button("Cancel", key="cancel_decision_button", use_container_width=True):
             clear_pending_decision()
             st.rerun()
 
@@ -1630,20 +1525,15 @@ def main() -> None:
         render_completion_state(reviewer, total_rows)
         return
 
-    handle_navigation_query_params(remaining_rows)
     clamp_card_index(remaining_rows)
 
     current_row = unreviewed_df.iloc[st.session_state.card_idx]
 
-    handle_decision_query_params(current_row)
-
     render_topbar(reviewer, reviewed_rows, total_rows)
 
-    render_flashcard(
-        current_row,
-        position=st.session_state.card_idx + 1,
-        remaining=remaining_rows,
-        card_idx=st.session_state.card_idx,
+    render_review_stage(
+        current_row=current_row,
+        remaining_rows=remaining_rows,
         total_cards=remaining_rows,
     )
 
@@ -1652,7 +1542,7 @@ def main() -> None:
 
     render_debug_context(current_row)
 
-    render_decision_buttons(current_row)
+    render_decision_buttons()
     render_decision_panel(current_row, reviewer)
 
     with st.expander("Reviewer guide", expanded=False):
