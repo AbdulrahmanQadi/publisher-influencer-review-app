@@ -1,0 +1,14 @@
+command: ['uvicorn', 'main:app', '--host', '0.0.0.0', '--port', '8000']
+
+env:
+  - name: 'DATABRICKS_WAREHOUSE_ID'
+    valueFrom: 'sql-warehouse'
+
+  - name: 'REVIEW_QUEUE_TABLE'
+    value: 'ml_prod.sandbox.publisher_influencer_review_handoff_v1_1'
+
+  - name: 'REVIEW_DECISIONS_TABLE'
+    value: 'ml_prod.sandbox.publisher_influencer_review_decisions_v1'
+
+  - name: 'DECISION_SOURCE'
+    value: 'databricks_app_react_flashcard_ui'
