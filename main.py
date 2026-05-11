@@ -613,7 +613,8 @@ INDEX_HTML = r'''
     .stats-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
     .stat { background: rgba(6, 14, 26, 0.62); border: 1px solid rgba(255,255,255,0.06); border-radius: 18px; padding: 11px 12px; min-width: 0; }
     .stat-label { color: #9EC5FF; font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 950; margin-bottom: 6px; }
-    .stat-value { color: #FFFFFF; font-weight: 900; font-size: .88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .stat-value { color: #FFFFFF; font-weight: 900; font-size: .88rem; overflow-wrap: anywhere; line-height: 1.22; }
+    .signal-note { color: #9FB2CC; font-size: .72rem; font-weight: 760; margin: -6px 0 12px; }
     .card-intel { margin-top: 16px; display: grid; grid-template-columns: 1.15fr .85fr; gap: 10px; }
     .intel-box { background: rgba(59,130,246,0.075); border: 1px solid rgba(96,165,250,0.11); border-radius: 18px; padding: 11px 12px; min-width: 0; }
     .intel-label { color: #93C5FD; text-transform: uppercase; letter-spacing: .08em; font-size: .65rem; font-weight: 950; margin-bottom: 6px; }
@@ -639,24 +640,61 @@ INDEX_HTML = r'''
     .warning-box { margin-top: 10px; background: rgba(245,158,11,.14); border: 1px solid rgba(251,191,36,.25); color: #FCD9A6; border-radius: 14px; padding: 10px 12px; font-weight: 850; }
     .context-note { color: #BFD0EA; font-size: .82rem; margin-top: 12px; }
     .action-help { text-align: center; color: #CAD7EA; font-size: .84rem; font-weight: 800; margin: 16px 0 10px; }
-    .action-buttons { max-width: 980px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-    .action-btn { min-height: 68px; border-radius: 24px; border: 1px solid transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 14px; color: white; font-weight: 950; box-shadow: 0 18px 44px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.08); transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, filter 180ms ease; }
-    .action-btn strong { display: block; font-size: 1.02rem; }
-    .action-btn small { display: block; margin-top: 2px; opacity: .88; font-weight: 800; }
-    .action-btn .icon { font-size: 1.45rem; }
-    .action-btn.reject { background: radial-gradient(circle at 20% 20%, rgba(248,113,113,.30), transparent 44%), linear-gradient(135deg, rgba(127,29,29,.96), rgba(69,10,10,.98)); border-color: rgba(248,113,113,.42); color: #FEE2E2; }
-    .action-btn.unsure { background: radial-gradient(circle at 20% 20%, rgba(251,191,36,.34), transparent 44%), linear-gradient(135deg, rgba(120,53,15,.96), rgba(69,26,3,.98)); border-color: rgba(251,191,36,.44); color: #FEF3C7; }
-    .action-btn.accept { background: radial-gradient(circle at 20% 20%, rgba(45,212,191,.32), transparent 44%), linear-gradient(135deg, rgba(6,95,70,.96), rgba(20,83,45,.98)); border-color: rgba(45,212,191,.44); color: #CCFBF1; }
+    .action-buttons { max-width: 960px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    .action-btn { min-height: 62px; border-radius: 22px; border: 1px solid transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 14px; color: white; font-weight: 950; box-shadow: 0 14px 38px rgba(0,0,0,.24), inset 0 1px 0 rgba(255,255,255,.07); transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, filter 180ms ease; }
+    .action-btn strong { display: block; font-size: .98rem; letter-spacing: -.01em; }
+    .action-btn small { display: block; margin-top: 2px; opacity: .84; font-weight: 800; font-size: .70rem; }
+    .action-btn .icon { width: 30px; height: 30px; border-radius: 999px; display: grid; place-items: center; font-size: 1.32rem; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.10); }
+    .action-btn.reject { background: radial-gradient(circle at 18% 20%, rgba(248,113,113,.20), transparent 44%), linear-gradient(135deg, rgba(112,26,26,.92), rgba(67,12,12,.96)); border-color: rgba(248,113,113,.34); color: #FEE2E2; }
+    .action-btn.unsure { background: radial-gradient(circle at 18% 20%, rgba(251,191,36,.24), transparent 44%), linear-gradient(135deg, rgba(113,63,18,.92), rgba(69,26,3,.96)); border-color: rgba(251,191,36,.36); color: #FEF3C7; }
+    .action-btn.accept { background: radial-gradient(circle at 18% 20%, rgba(45,212,191,.24), transparent 44%), linear-gradient(135deg, rgba(6,78,59,.92), rgba(20,83,45,.96)); border-color: rgba(45,212,191,.36); color: #CCFBF1; }
     .action-btn:hover { transform: translateY(-2px) scale(1.01); filter: saturate(1.08); }
-    .action-btn.active { outline: 2px solid rgba(255,255,255,.58); outline-offset: 3px; }
+    .action-btn.reject:hover { box-shadow: 0 20px 50px rgba(220,38,38,.26), inset 0 1px 0 rgba(255,255,255,.09); border-color: rgba(252,165,165,.68); }
+    .action-btn.unsure:hover { box-shadow: 0 20px 50px rgba(245,158,11,.24), inset 0 1px 0 rgba(255,255,255,.09); border-color: rgba(253,224,71,.70); }
+    .action-btn.accept:hover { box-shadow: 0 20px 50px rgba(20,184,166,.24), inset 0 1px 0 rgba(255,255,255,.09); border-color: rgba(94,234,212,.70); }
+    .action-btn.active { outline: 2px solid rgba(255,255,255,.52); outline-offset: 3px; }
     .shortcuts { margin: 10px auto 0; text-align: center; color: #93A8C7; font-size: .76rem; font-weight: 750; }
     .reason-panel { max-width: 860px; margin: 18px auto 0; border: 1px solid rgba(126,167,255,.22); background: linear-gradient(145deg, rgba(11,23,40,.92), rgba(7,15,28,.96)); border-radius: 24px; padding: 18px; box-shadow: 0 24px 72px rgba(0,0,0,.34); animation: reasonRise 260ms ease-out; }
     @keyframes reasonRise { from { opacity: 0; transform: translateY(18px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
     .reason-title { font-size: 1.05rem; font-weight: 950; margin-bottom: 4px; }
     .reason-subtitle { color: #BFD0EA; font-size: .86rem; margin-bottom: 14px; }
     .reason-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
-    .reason-chip { border: 1px solid rgba(148,163,184,.18); background: rgba(148,163,184,.10); color: #EAF2FF; padding: 9px 11px; border-radius: 999px; cursor: pointer; font-weight: 850; }
-    .reason-chip.selected { border-color: rgba(45,212,191,.52); background: rgba(20,184,166,.16); color: #CCFBF1; }
+    .reason-chip {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(148,163,184,.22);
+      background: radial-gradient(circle at 20% 20%, rgba(96,165,250,.10), transparent 40%), rgba(15,23,42,.82);
+      color: #EAF2FF;
+      padding: 10px 13px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-weight: 875;
+      transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, background 180ms ease, color 180ms ease;
+    }
+    .reason-chip:before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(120deg, transparent 0%, rgba(255,255,255,.11) 45%, transparent 70%);
+      transform: translateX(-120%);
+      transition: transform 420ms ease;
+      pointer-events: none;
+    }
+    .reason-chip:hover {
+      transform: translateY(-2px);
+      border-color: rgba(147,197,253,.56);
+      color: #FFFFFF;
+      background: radial-gradient(circle at 20% 20%, rgba(96,165,250,.22), transparent 42%), rgba(30,41,59,.92);
+      box-shadow: 0 14px 34px rgba(37,99,235,.20), inset 0 1px 0 rgba(255,255,255,.08);
+    }
+    .reason-chip:hover:before { transform: translateX(120%); }
+    .reason-chip:active { transform: translateY(0) scale(.985); }
+    .reason-chip.selected {
+      border-color: rgba(45,212,191,.75);
+      color: #CCFBF1;
+      background: radial-gradient(circle at 20% 20%, rgba(45,212,191,.26), transparent 42%), linear-gradient(135deg, rgba(6,95,70,.88), rgba(20,83,45,.82));
+      box-shadow: 0 16px 38px rgba(20,184,166,.22), inset 0 1px 0 rgba(255,255,255,.10);
+    }
     textarea { width: 100%; min-height: 86px; resize: vertical; color: #F8FAFC; background: rgba(6,14,26,.72); border: 1px solid rgba(148,163,184,.16); border-radius: 18px; padding: 12px; font-size: .94rem; outline: none; }
     textarea:focus { border-color: rgba(96,165,250,.58); }
     .save-row { display: flex; gap: 10px; margin-top: 12px; }
@@ -730,6 +768,26 @@ INDEX_HTML = r'''
       const n = Number(v);
       return Number.isFinite(n) ? String(Math.round(n)) : String(v);
     }
+    function evidenceLevel(score) {
+      const n = Number(score || 0);
+      if (n >= 7) return 'High';
+      if (n >= 3) return 'Medium';
+      return 'Low';
+    }
+    function riskLevel(score) {
+      const n = Number(score || 0);
+      if (n >= 5) return 'High';
+      if (n >= 2) return 'Medium';
+      return 'Low';
+    }
+    function reviewerConfidenceLabel(conf) {
+      if (conf === 'likely_creator') return 'Creator-like evidence';
+      if (conf === 'possible_creator') return 'Some creator evidence';
+      if (conf === 'creator_commercial_business_like') return 'Creator-commerce signals';
+      if (conf === 'likely_not_creator') return 'Non-creator risk';
+      if (conf === 'ambiguous') return 'Mixed evidence';
+      return labelFromSnake(conf) || 'Evidence hint';
+    }
     function pct(progress) {
       const total = Number(progress?.total_rows || 0);
       const reviewed = Number(progress?.reviewed_rows || 0);
@@ -767,7 +825,7 @@ INDEX_HTML = r'''
     function actionImplication(row) {
       if (bool(row.signal_current_cluster)) {
         return {
-          label: 'Current cluster publisher',
+          label: 'Already in current cluster',
           text: 'Reviewer decision helps confirm whether this publisher should stay in the cluster or be removed.',
           creator: 'Keep in cluster',
           reject: 'Remove from cluster',
@@ -775,7 +833,7 @@ INDEX_HTML = r'''
       }
       if (bool(row.signal_hidden_positive)) {
         return {
-          label: 'Hidden-positive candidate',
+          label: 'Candidate to add',
           text: 'Reviewer decision helps decide whether this publisher should be added to the cluster.',
           creator: 'Candidate to add',
           reject: 'Leave out',
@@ -809,7 +867,9 @@ INDEX_HTML = r'''
       if (bool(row.signal_description_media_terms)) items.push('Media/editorial terms');
       if (bool(row.is_restricted_flag) || bool(row.IsRestricted)) items.push('Restricted');
       if (bool(row.is_test_flag) || bool(row.IsTest)) items.push('Test publisher');
-      if (safe(row.BlacklistStatus)) items.push(`Blacklist: ${safe(row.BlacklistStatus)}`);
+      const blacklist = safe(row.BlacklistStatus).toLowerCase().trim();
+      const safeBlacklistValues = ['', 'not blacklisted', 'none', 'null', 'false', '0', 'no', 'n/a', 'na'];
+      if (blacklist && !safeBlacklistValues.includes(blacklist)) items.push(`Blacklist: ${safe(row.BlacklistStatus)}`);
       return items;
     }
     function qualityItems(row) {
@@ -867,7 +927,7 @@ INDEX_HTML = r'''
       const bucket = safe(row.priority_bucket);
       const bucketLabel = safe(row.priority_bucket_label, labelFromSnake(bucket) || 'Priority bucket');
       const conf = safe(row.review_confidence_hint);
-      const confLabel = safe(row.review_confidence_hint_label, labelFromSnake(conf) || 'Evidence hint');
+      const confLabel = reviewerConfidenceLabel(conf);
       const website = safe(row.PublisherWebSite);
       const domain = domainFor(website);
       const description = safe(row.PublisherDescription, 'No description provided.');
@@ -881,7 +941,7 @@ INDEX_HTML = r'''
         e('div', { className: 'card-stack' },
           e('article', { key: `${safe(row.PublisherKey)}-${index}`, className: `flashcard ${direction === 'prev' ? 'slide-prev' : 'slide-next'} ${activeClass}` },
             e('div', { className: 'card-topline' },
-              e('div', { className: 'card-kicker' }, `Card ${index + 1} of ${total} unreviewed · ${remaining} remaining`),
+              e('div', { className: 'card-kicker' }, `Unreviewed card ${index + 1} / ${total} · ${remaining} left`),
               e('div', { className: 'impact-pill' }, e('span', { className: 'impact-dot' }), e('span', null, impact.label))
             ),
             e('div', { className: 'chip-row' },
@@ -889,6 +949,7 @@ INDEX_HTML = r'''
               e(Chip, { label: confLabel, color: confidenceChip(conf) }),
               e(Chip, { label: `Website: ${safe(row.website_type, 'unknown')}`, color: 'slate' })
             ),
+            e('div', { className: 'signal-note' }, 'Signals are guidance only · reviewer makes the final decision'),
             e('div', { className: 'publisher-title' }, safe(row.Publisher, 'Unknown publisher')),
             e('div', { className: 'publisher-site' }, website ? e('a', { href: website.startsWith('http') ? website : `https://${website}`, target: '_blank', rel: 'noopener noreferrer' }, domain || website) : 'No website provided'),
             e('div', { className: 'description' }, description),
@@ -896,7 +957,7 @@ INDEX_HTML = r'''
               e('div', { className: 'stat' }, e('div', { className: 'stat-label' }, 'Vertical'), e('div', { className: 'stat-value', title: safe(row.current_publisher_vertical, '—') }, safe(row.current_publisher_vertical, '—'))),
               e('div', { className: 'stat' }, e('div', { className: 'stat-label' }, 'Current type'), e('div', { className: 'stat-value', title: safe(row.current_publisher_type_group, '—') }, safe(row.current_publisher_type_group, '—'))),
               e('div', { className: 'stat' }, e('div', { className: 'stat-label' }, 'Subvertical'), e('div', { className: 'stat-value', title: safe(row.current_publisher_subvertical, '—') }, safe(row.current_publisher_subvertical, '—'))),
-              e('div', { className: 'stat' }, e('div', { className: 'stat-label' }, 'Evidence / risk'), e('div', { className: 'stat-value' }, `${formatScore(row.creator_evidence_score)} / ${formatScore(row.non_creator_risk_score)}`))
+              e('div', { className: 'stat' }, e('div', { className: 'stat-label' }, 'Signals'), e('div', { className: 'stat-value' }, `Evidence: ${evidenceLevel(row.creator_evidence_score)} · Risk: ${riskLevel(row.non_creator_risk_score)}`))
             ),
             e('div', { className: 'card-intel' },
               e('div', { className: 'intel-box' },
@@ -928,7 +989,7 @@ INDEX_HTML = r'''
       const quality = qualityItems(row);
       return e('div', { className: 'context-card' },
         e('button', { className: 'context-toggle', onClick: () => setOpen(!open) },
-          e('span', null, open ? 'Hide review context' : 'Review context · why this card was selected'),
+          e('span', null, open ? 'Hide supporting context' : 'Supporting context'),
           e('span', null, open ? '⌃' : '⌄')
         ),
         open && e('div', { className: 'context-body' },
@@ -949,11 +1010,17 @@ INDEX_HTML = r'''
             ),
             e('section', { className: 'context-section' },
               e('div', { className: 'context-label' }, 'Positive creator evidence'),
-              e('div', { className: 'flag-cloud' }, ev.length ? ev.map(item => e(MiniChip, { key: item, label: item, tone: 'good' })) : e(MiniChip, { label: 'No strong creator evidence detected' }))
+              e('div', { className: 'flag-cloud' },
+                e(MiniChip, { label: `Evidence score: ${formatScore(row.creator_evidence_score)}`, tone: 'good' }),
+                ev.length ? ev.map(item => e(MiniChip, { key: item, label: item, tone: 'good' })) : e(MiniChip, { label: 'No strong creator evidence detected' })
+              )
             ),
             e('section', { className: 'context-section' },
               e('div', { className: 'context-label' }, 'Risk / warning lens'),
-              e('div', { className: 'flag-cloud' }, risks.length ? risks.map(item => e(MiniChip, { key: item, label: item, tone: item.toLowerCase().includes('commercial') ? 'warn' : 'risk' })) : e(MiniChip, { label: 'No major risk flags', tone: 'good' })),
+              e('div', { className: 'flag-cloud' },
+                e(MiniChip, { label: `Risk score: ${formatScore(row.non_creator_risk_score)}`, tone: Number(row.non_creator_risk_score || 0) >= 2 ? 'warn' : 'good' }),
+                risks.length ? risks.map(item => e(MiniChip, { key: item, label: item, tone: item.toLowerCase().includes('commercial') ? 'warn' : 'risk' })) : e(MiniChip, { label: 'No major risk flags', tone: 'good' })
+              ),
               safe(row.reviewer_warning_message) && e('div', { className: 'warning-box' }, safe(row.reviewer_warning_message))
             ),
             e('section', { className: 'context-section' },
@@ -984,7 +1051,7 @@ INDEX_HTML = r'''
               e('div', { className: 'context-note' }, safe(row.reviewer_guidance_hint, 'Reviewer should inspect manually.'))
             )
           ),
-          e('div', { className: 'context-note' }, 'These are supporting signals only. The final decision should still be based on reviewer judgement.')
+          e('div', { className: 'context-note' }, 'These are supporting signals only. Please use business judgement as the final source of truth.')
         )
       );
     }
