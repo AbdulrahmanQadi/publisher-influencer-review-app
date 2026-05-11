@@ -8,10 +8,13 @@ from databricks import sql
 from databricks.sdk.core import Config
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
+
+# ============================================================
+# Configuration
+# ============================================================
 
 QUEUE_TABLE = os.getenv(
     "REVIEW_QUEUE_TABLE",
@@ -27,6 +30,10 @@ DECISION_SOURCE = os.getenv(
 )
 
 
+# ============================================================
+# Safety helpers
+# ============================================================
+
 def validate_table_name(table_name: str) -> str:
     name = str(table_name or "").strip()
     if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*){0,2}$", name):
@@ -37,7 +44,12 @@ def validate_table_name(table_name: str) -> str:
 QUEUE_TABLE = validate_table_name(QUEUE_TABLE)
 DECISIONS_TABLE = validate_table_name(DECISIONS_TABLE)
 
-app = FastAPI(title="Publisher Influencer Review App", version="2.0.0")
+
+# ============================================================
+# FastAPI app
+# ============================================================
+
+app = FastAPI(title="Publisher Influencer Review App", version="3.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -45,7 +57,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 class DecisionPayload(BaseModel):
@@ -56,6 +67,10 @@ class DecisionPayload(BaseModel):
     review_reason_detail: str
     review_comment: Optional[str] = ""
 
+
+# ============================================================
+# Databricks SQL helpers
+# ============================================================
 
 def get_http_path() -> str:
     explicit_http_path = os.getenv("DATABRICKS_HTTP_PATH", "").strip()
@@ -127,6 +142,10 @@ def execute_sql(query: str, params: Optional[List[Any]] = None) -> None:
             conn.close()
 
 
+# ============================================================
+# Data serialization helpers
+# ============================================================
+
 def clean_value(value: Any) -> Any:
     if value is None:
         return None
@@ -139,7 +158,6 @@ def clean_value(value: Any) -> Any:
     if isinstance(value, (pd.Timestamp, datetime)):
         return value.isoformat()
 
-    # databricks connector can return decimal/numpy-like values in some workspaces.
     try:
         import decimal
         if isinstance(value, decimal.Decimal):
@@ -155,7 +173,7 @@ def clean_value(value: Any) -> Any:
 def df_to_records(df: pd.DataFrame) -> List[Dict[str, Any]]:
     if df.empty:
         return []
-    records = []
+    records: List[Dict[str, Any]] = []
     for record in df.to_dict(orient="records"):
         records.append({k: clean_value(v) for k, v in record.items()})
     return records
@@ -175,6 +193,10 @@ def safe_int(value: Any, default: int = 0) -> int:
     except Exception:
         return default
 
+
+# ============================================================
+# Reviewer identity
+# ============================================================
 
 def get_reviewer_from_request(request: Request) -> Dict[str, str]:
     headers = {k.lower(): v for k, v in request.headers.items()}
@@ -200,7 +222,7 @@ def get_reviewer_from_request(request: Request) -> Dict[str, str]:
         name = email.split("@")[0].replace(".", " ").replace("_", " ").title()
 
     if not email:
-        # Local/dev fallback. In Databricks Apps, enable user auth headers later for proper reviewer identity.
+        # Local/dev fallback. In Databricks Apps, user headers should be available after auth setup.
         email = "local_reviewer@local.dev"
         name = "Local Reviewer"
 
@@ -219,14 +241,13 @@ def infer_review_outcome(decision_type: str, row: Dict[str, Any]) -> Tuple[str, 
     return "unsure", "unclear"
 
 
-@app.get("/")
-def root():
-    return FileResponse("static/index.html")
-
+# ============================================================
+# API endpoints
+# ============================================================
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "version": "3.0.0"}
 
 
 @app.get("/api/me")
@@ -266,36 +287,11 @@ def queue(request: Request):
 
         return {
             "reviewer": reviewer,
+            "progress": {k: clean_value(v) for k, v in progress.items()},
             "queue": df_to_records(queue_df),
-            "progress": {
-                "total_rows": safe_int(progress.get("total_rows", 0)),
-                "reviewed_rows": safe_int(progress.get("reviewed_rows", 0)),
-                "remaining_rows": safe_int(progress.get("remaining_rows", len(queue_df))),
-            },
         }
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@app.get("/api/progress")
-def progress():
-    try:
-        summary_sql = f"""
-            SELECT
-                q.priority_bucket,
-                d.reviewed_cluster_label,
-                d.review_reason_category,
-                COUNT(*) AS rows
-            FROM {QUEUE_TABLE} q
-            LEFT JOIN {DECISIONS_TABLE} d
-                ON q.review_batch_id = d.review_batch_id
-               AND q.PublisherKey = d.PublisherKey
-            GROUP BY 1, 2, 3
-            ORDER BY 1, 2, 3
-        """
-        return {"summary": df_to_records(query_df(summary_sql))}
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.post("/api/decision")
@@ -310,11 +306,10 @@ def save_decision(payload: DecisionPayload, request: Request):
               AND PublisherKey = CAST(? AS INT)
             LIMIT 1
         """
-        row_df = query_df(row_sql, [payload.review_batch_id, payload.PublisherKey])
+        row_df = query_df(row_sql, [payload.review_batch_id, int(payload.PublisherKey)])
         if row_df.empty:
             raise HTTPException(status_code=404, detail="Publisher not found in review queue.")
-
-        row = {k: clean_value(v) for k, v in row_df.iloc[0].to_dict().items()}
+        row = row_df.iloc[0].to_dict()
 
         existing_sql = f"""
             SELECT reviewer_email, reviewer_name
@@ -323,13 +318,12 @@ def save_decision(payload: DecisionPayload, request: Request):
               AND PublisherKey = CAST(? AS INT)
             LIMIT 1
         """
-        existing_df = query_df(existing_sql, [payload.review_batch_id, payload.PublisherKey])
-
+        existing_df = query_df(existing_sql, [payload.review_batch_id, int(payload.PublisherKey)])
         if not existing_df.empty:
             existing_email = str(existing_df.iloc[0].get("reviewer_email") or "").lower().strip()
-            current_email = str(reviewer["reviewer_email"] or "").lower().strip()
+            current_email = reviewer["reviewer_email"].lower().strip()
             if existing_email and existing_email != current_email:
-                existing_name = str(existing_df.iloc[0].get("reviewer_name") or existing_email)
+                existing_name = existing_df.iloc[0].get("reviewer_name") or existing_email
                 raise HTTPException(
                     status_code=409,
                     detail=f"Already reviewed by {existing_name}. This row is read-only.",
@@ -398,8 +392,7 @@ def save_decision(payload: DecisionPayload, request: Request):
                 non_creator_risk_score,
                 created_at,
                 updated_at
-            )
-            VALUES (
+            ) VALUES (
                 source.review_batch_id,
                 source.PublisherKey,
                 source.reviewed_cluster_label,
@@ -421,35 +414,563 @@ def save_decision(payload: DecisionPayload, request: Request):
             )
         """
 
-        params = [
-            payload.review_batch_id,
-            payload.PublisherKey,
-            reviewed_cluster_label,
-            review_outcome,
-            payload.review_reason_category,
-            payload.review_reason_detail,
-            payload.review_comment or "",
-            reviewer["reviewer_name"],
-            reviewer["reviewer_email"],
-            reviewed_at,
-            DECISION_SOURCE,
-            safe_int(row.get("review_sequence", 0)),
-            str(row.get("priority_bucket") or ""),
-            str(row.get("review_confidence_hint") or ""),
-            safe_int(row.get("creator_evidence_score", 0)),
-            safe_int(row.get("non_creator_risk_score", 0)),
-        ]
+        execute_sql(
+            merge_sql,
+            [
+                payload.review_batch_id,
+                int(payload.PublisherKey),
+                reviewed_cluster_label,
+                review_outcome,
+                payload.review_reason_category,
+                payload.review_reason_detail,
+                payload.review_comment or "",
+                reviewer["reviewer_name"],
+                reviewer["reviewer_email"],
+                reviewed_at,
+                DECISION_SOURCE,
+                safe_int(row.get("review_sequence")),
+                row.get("priority_bucket") or "",
+                row.get("review_confidence_hint") or "",
+                safe_int(row.get("creator_evidence_score")),
+                safe_int(row.get("non_creator_risk_score")),
+            ],
+        )
 
-        execute_sql(merge_sql, params)
-
-        return {
-            "ok": True,
-            "message": "Decision saved.",
-            "reviewer": reviewer,
-            "reviewed_cluster_label": reviewed_cluster_label,
-            "review_outcome": review_outcome,
-        }
+        return {"status": "saved", "reviewer": reviewer}
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+# ============================================================
+# Premium inline React app
+# ============================================================
+
+INDEX_HTML = r'''
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Influencer Review</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <style>
+    :root {
+      --bg0: #050B15;
+      --bg1: #07111F;
+      --bg2: #0B1729;
+      --text: #F8FAFC;
+      --muted: #A9BAD4;
+      --soft: #C7D2FE;
+      --blue: #60A5FA;
+      --cyan: #22D3EE;
+      --teal: #2DD4BF;
+      --green: #34D399;
+      --amber: #FBBF24;
+      --red: #FB7185;
+      --border: rgba(148, 163, 184, 0.17);
+      --shadow: 0 24px 72px rgba(0,0,0,0.42);
+      --radius: 30px;
+    }
+    * { box-sizing: border-box; }
+    html, body, #root {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 14% 6%, rgba(96, 165, 250, 0.23), transparent 27%),
+        radial-gradient(circle at 85% 10%, rgba(45, 212, 191, 0.16), transparent 28%),
+        radial-gradient(circle at 50% 95%, rgba(124, 58, 237, 0.14), transparent 24%),
+        linear-gradient(135deg, #050B15 0%, #07111F 45%, #10152B 100%);
+      overflow-x: hidden;
+    }
+    body:before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+      background-size: 56px 56px;
+      mask-image: radial-gradient(circle at center, black, transparent 78%);
+    }
+    .app-shell {
+      min-height: 100vh;
+      padding: 16px 24px 30px;
+      position: relative;
+    }
+    .topbar {
+      max-width: 1160px;
+      margin: 0 auto 16px;
+      display: grid;
+      grid-template-columns: minmax(310px, 1fr) minmax(260px, 0.8fr) minmax(220px, 0.7fr);
+      align-items: center;
+      gap: 18px;
+      border: 1px solid var(--border);
+      background:
+        radial-gradient(circle at 92% 20%, rgba(45,212,191,0.12), transparent 30%),
+        linear-gradient(135deg, rgba(10, 22, 39, 0.86), rgba(7, 15, 28, 0.91));
+      border-radius: 24px;
+      box-shadow: 0 20px 56px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.06);
+      backdrop-filter: blur(18px);
+      padding: 14px 18px;
+    }
+    .brand-row { display: flex; align-items: center; gap: 14px; }
+    .logo-orb {
+      width: 44px;
+      height: 44px;
+      border-radius: 16px;
+      background:
+        radial-gradient(circle at 30% 25%, #E0F2FE, transparent 24%),
+        linear-gradient(135deg, #2563EB, #14B8A6 78%);
+      display: grid;
+      place-items: center;
+      box-shadow: 0 16px 36px rgba(34, 211, 238, 0.25);
+      font-weight: 950;
+      letter-spacing: -0.08em;
+    }
+    .brand-title { font-size: 1.02rem; font-weight: 950; letter-spacing: -0.03em; line-height: 1.1; }
+    .brand-subtitle { margin-top: 4px; color: #BFD0EA; font-size: 0.80rem; font-weight: 600; }
+    .progress-zone { min-width: 260px; }
+    .progress-label { display: flex; justify-content: space-between; font-size: 0.78rem; color: #D6E4FF; margin-bottom: 8px; font-weight: 800; }
+    .progress-track { width: 100%; height: 8px; background: rgba(148, 163, 184, 0.13); border-radius: 999px; overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,0.28); }
+    .progress-fill { height: 8px; border-radius: 999px; background: linear-gradient(90deg, var(--blue), var(--cyan), var(--teal)); box-shadow: 0 0 20px rgba(34, 211, 238, 0.34); transition: width 450ms ease; }
+    .reviewer-badge { text-align: right; min-width: 205px; }
+    .reviewer-label { color: #90A7C8; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.64rem; font-weight: 900; }
+    .reviewer-name { color: #F8FAFC; font-size: 0.92rem; font-weight: 900; margin-top: 4px; }
+    .reviewer-email { color: #93C5FD; font-size: 0.76rem; font-weight: 650; margin-top: 2px; }
+    .main-view { max-width: 1160px; margin: 0 auto; }
+    .stage { display: grid; grid-template-columns: 56px minmax(0, 1fr) 56px; gap: 14px; align-items: center; }
+    .nav-button {
+      width: 50px; height: 50px; border-radius: 999px; border: 1px solid rgba(147, 197, 253, 0.25); color: #E0F2FE;
+      background: radial-gradient(circle at 30% 20%, rgba(96,165,250,0.26), transparent 45%), rgba(13, 24, 42, 0.86);
+      box-shadow: 0 18px 44px rgba(0,0,0,0.30); font-size: 1.95rem; font-weight: 950; display: grid; place-items: center; cursor: pointer;
+      transition: transform 180ms ease, border-color 180ms ease, opacity 180ms ease, box-shadow 180ms ease;
+    }
+    .nav-button:hover:not(:disabled) { transform: translateY(-2px) scale(1.04); border-color: rgba(147, 197, 253, 0.75); box-shadow: 0 20px 48px rgba(96,165,250,0.18); }
+    .nav-button:disabled { opacity: 0.18; cursor: not-allowed; }
+    .card-wrap { perspective: 1200px; position: relative; }
+    .card-stack {
+      position: relative;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .card-stack:before, .card-stack:after {
+      content: "";
+      position: absolute;
+      left: 26px;
+      right: 26px;
+      height: 100%;
+      border-radius: var(--radius);
+      background: rgba(20, 38, 64, 0.36);
+      border: 1px solid rgba(126, 167, 255, 0.10);
+      pointer-events: none;
+    }
+    .card-stack:before { top: 12px; transform: scale(0.975); opacity: 0.38; }
+    .card-stack:after { top: 24px; transform: scale(0.945); opacity: 0.20; }
+    .flashcard {
+      max-width: 800px;
+      min-height: 386px;
+      margin: 0 auto;
+      border: 1px solid rgba(126, 167, 255, 0.24);
+      border-radius: var(--radius);
+      background:
+        radial-gradient(circle at 88% 8%, rgba(20,184,166,0.22), transparent 28%),
+        radial-gradient(circle at 8% 96%, rgba(96,165,250,0.17), transparent 28%),
+        linear-gradient(145deg, rgba(18,31,52,0.96), rgba(8,17,31,0.98));
+      box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
+      padding: 26px 30px 22px;
+      overflow: hidden;
+      position: relative;
+      z-index: 2;
+      transition: border-color 260ms ease, box-shadow 260ms ease;
+    }
+    .flashcard.accept-active { border-color: rgba(45,212,191,0.52); box-shadow: 0 24px 72px rgba(20,184,166,0.20), var(--shadow); }
+    .flashcard.reject-active { border-color: rgba(248,113,113,0.52); box-shadow: 0 24px 72px rgba(220,38,38,0.20), var(--shadow); }
+    .flashcard.unsure-active { border-color: rgba(251,191,36,0.52); box-shadow: 0 24px 72px rgba(245,158,11,0.18), var(--shadow); }
+    .slide-next { animation: slideNext 300ms cubic-bezier(.2,.8,.2,1); }
+    .slide-prev { animation: slidePrev 300ms cubic-bezier(.2,.8,.2,1); }
+    @keyframes slideNext { from { opacity: 0; transform: translateX(24px) rotateY(-3deg) scale(.992); filter: blur(2px); } to { opacity: 1; transform: translateX(0) rotateY(0) scale(1); filter: blur(0); } }
+    @keyframes slidePrev { from { opacity: 0; transform: translateX(-24px) rotateY(3deg) scale(.992); filter: blur(2px); } to { opacity: 1; transform: translateX(0) rotateY(0) scale(1); filter: blur(0); } }
+    .card-kicker { color: #A8BEDD; font-size: 0.72rem; font-weight: 950; letter-spacing: 0.10em; text-transform: uppercase; margin-bottom: 12px; }
+    .chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .chip { border-radius: 999px; padding: 6px 10px; font-size: 0.72rem; font-weight: 900; border: 1px solid transparent; white-space: nowrap; }
+    .chip.green { background: rgba(16,185,129,.17); color: #BBF7D0; border-color: rgba(74,222,128,.24); }
+    .chip.blue { background: rgba(59,130,246,.16); color: #BFD7FF; border-color: rgba(96,165,250,.26); }
+    .chip.amber { background: rgba(245,158,11,.17); color: #FCD9A6; border-color: rgba(251,191,36,.26); }
+    .chip.red { background: rgba(239,68,68,.16); color: #FECACA; border-color: rgba(248,113,113,.24); }
+    .chip.slate { background: rgba(148,163,184,.13); color: #D7E0EC; border-color: rgba(203,213,225,.13); }
+    .publisher-title { font-size: clamp(2rem, 4.3vw, 2.55rem); font-weight: 950; letter-spacing: -0.055em; line-height: 1.02; margin: 0 0 10px; }
+    .publisher-site a { color: #9EC5FF; font-weight: 850; text-decoration: none; }
+    .publisher-site a:hover { text-decoration: underline; }
+    .description { margin-top: 18px; border: 1px solid rgba(255,255,255,0.06); background: rgba(5, 13, 25, 0.58); border-radius: 22px; padding: 16px 18px; line-height: 1.48; color: #F1F6FF; font-size: 1.02rem; max-height: 112px; overflow-y: auto; }
+    .stats-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+    .stat { background: rgba(6, 14, 26, 0.62); border: 1px solid rgba(255,255,255,0.06); border-radius: 18px; padding: 12px 14px; }
+    .stat-label { color: #9EC5FF; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 950; margin-bottom: 6px; }
+    .stat-value { color: #FFFFFF; font-weight: 900; font-size: .96rem; }
+    .evidence-strip { margin-top: 16px; display: flex; gap: 10px; align-items: center; color: #C7D2FE; font-size: 0.80rem; line-height: 1.35; background: rgba(59,130,246,0.08); border: 1px solid rgba(96,165,250,0.11); border-radius: 18px; padding: 11px 12px; }
+    .evidence-dot { width: 8px; height: 8px; border-radius: 999px; background: linear-gradient(135deg, var(--cyan), var(--teal)); box-shadow: 0 0 14px rgba(34,211,238,0.45); flex: none; }
+    .context-card { max-width: 840px; margin: 14px auto 0; border: 1px solid rgba(148, 163, 184, 0.15); background: rgba(6, 14, 26, 0.62); border-radius: 20px; overflow: hidden; }
+    .context-toggle { width: 100%; background: transparent; border: 0; color: #EAF2FF; padding: 15px 18px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; font-weight: 900; font-size: 0.92rem; }
+    .context-toggle span { color: #93C5FD; }
+    .context-body { border-top: 1px solid rgba(148, 163, 184, 0.11); padding: 18px; animation: drawerOpen 240ms ease-out; }
+    @keyframes drawerOpen { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+    .context-row { margin-bottom: 14px; }
+    .context-label { color: #93C5FD; font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 950; margin-bottom: 5px; }
+    .context-value { color: #F8FAFC; line-height: 1.45; }
+    .warning-box { margin-top: 10px; background: rgba(245,158,11,.14); border: 1px solid rgba(251,191,36,.25); color: #FCD9A6; border-radius: 14px; padding: 10px 12px; font-weight: 800; }
+    .context-note { color: #BFD0EA; font-size: .82rem; margin-top: 10px; }
+    .action-help { text-align: center; color: #CAD7EA; font-size: .84rem; font-weight: 800; margin: 16px 0 10px; }
+    .action-buttons { max-width: 980px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    .action-btn { min-height: 68px; border-radius: 24px; border: 1px solid transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 14px; color: white; font-weight: 950; box-shadow: 0 18px 44px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.08); transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, filter 180ms ease; }
+    .action-btn strong { display: block; font-size: 1.02rem; }
+    .action-btn small { display: block; margin-top: 2px; opacity: .88; font-weight: 800; }
+    .action-btn .icon { font-size: 1.45rem; }
+    .action-btn.reject { background: radial-gradient(circle at 20% 20%, rgba(248,113,113,.30), transparent 44%), linear-gradient(135deg, rgba(127,29,29,.96), rgba(69,10,10,.98)); border-color: rgba(248,113,113,.42); color: #FEE2E2; }
+    .action-btn.unsure { background: radial-gradient(circle at 20% 20%, rgba(251,191,36,.34), transparent 44%), linear-gradient(135deg, rgba(120,53,15,.96), rgba(69,26,3,.98)); border-color: rgba(251,191,36,.44); color: #FEF3C7; }
+    .action-btn.accept { background: radial-gradient(circle at 20% 20%, rgba(45,212,191,.32), transparent 44%), linear-gradient(135deg, rgba(6,95,70,.96), rgba(20,83,45,.98)); border-color: rgba(45,212,191,.44); color: #CCFBF1; }
+    .action-btn:hover { transform: translateY(-2px) scale(1.01); filter: saturate(1.08); }
+    .action-btn.active { outline: 2px solid rgba(255,255,255,.36); box-shadow: 0 20px 56px rgba(34,211,238,.16), inset 0 1px 0 rgba(255,255,255,.16); }
+    .reason-panel { max-width: 850px; margin: 18px auto 0; border: 1px solid rgba(148, 163, 184, 0.17); background: linear-gradient(135deg, rgba(10,22,39,.90), rgba(7,15,28,.92)); border-radius: 26px; box-shadow: 0 22px 60px rgba(0,0,0,.34); padding: 20px; animation: panelRise 300ms cubic-bezier(.2,.8,.2,1); }
+    @keyframes panelRise { from { opacity: 0; transform: translateY(24px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    .reason-title { font-size: 1.1rem; font-weight: 950; }
+    .reason-subtitle { color: #BFD0EA; font-size: .86rem; margin-top: 4px; }
+    .reason-chips { display: flex; flex-wrap: wrap; gap: 9px; margin: 16px 0; }
+    .reason-chip { border: 1px solid rgba(148,163,184,.20); background: rgba(15,23,42,.82); color: #EAF2FF; border-radius: 999px; padding: 9px 12px; font-weight: 850; cursor: pointer; transition: all 180ms ease; }
+    .reason-chip:hover { border-color: rgba(96,165,250,.58); transform: translateY(-1px); }
+    .reason-chip.selected { background: rgba(96,165,250,.22); border-color: rgba(147,197,253,.72); color: #FFFFFF; }
+    textarea { width: 100%; min-height: 82px; resize: vertical; border-radius: 18px; border: 1px solid rgba(148,163,184,.18); background: rgba(6,14,26,.80); color: #F8FAFC; padding: 13px 14px; font-family: inherit; outline: none; }
+    textarea::placeholder { color: #8FA6C6; }
+    .save-row { display: flex; gap: 12px; margin-top: 12px; }
+    .save-btn, .cancel-btn { border-radius: 18px; min-height: 46px; padding: 0 18px; border: 1px solid rgba(148,163,184,.18); color: #F8FAFC; font-weight: 900; cursor: pointer; }
+    .save-btn { flex: 1; background: linear-gradient(135deg, rgba(37,99,235,.95), rgba(20,184,166,.88)); box-shadow: 0 16px 36px rgba(34,211,238,.18); }
+    .cancel-btn { background: rgba(15,23,42,.72); }
+    .shortcuts { text-align: center; margin-top: 12px; color: #8FA6C6; font-size: .76rem; font-weight: 750; }
+    .toast { position: fixed; right: 24px; bottom: 24px; z-index: 20; background: rgba(8,17,31,.94); border: 1px solid rgba(45,212,191,.34); color: #CCFBF1; border-radius: 18px; padding: 12px 14px; box-shadow: 0 18px 46px rgba(0,0,0,.36); animation: toastIn 240ms ease-out; }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .error-card, .empty-state { max-width: 760px; margin: 60px auto; padding: 24px; border-radius: 24px; border: 1px solid rgba(248,113,113,.24); background: rgba(127,29,29,.16); color: #FEE2E2; }
+    @media (max-width: 900px) {
+      .app-shell { padding: 12px 14px 24px; }
+      .topbar { grid-template-columns: 1fr; }
+      .reviewer-badge { text-align: left; }
+      .stage { grid-template-columns: 42px minmax(0,1fr) 42px; gap: 8px; }
+      .nav-button { width: 42px; height: 42px; font-size: 1.55rem; }
+      .flashcard { padding: 20px; min-height: auto; }
+      .stats-grid, .action-buttons { grid-template-columns: 1fr; }
+      .publisher-title { font-size: 2rem; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+    const e = React.createElement;
+    const { useEffect, useMemo, useRef, useState } = React;
+
+    const REASON_OPTIONS = {
+      creator: [
+        ['Creator / personal brand', 'creator_individual_or_creator_brand'],
+        ['Social profile evidence', 'creator_individual_or_creator_brand'],
+        ['UGC / product review creator', 'creator_individual_or_creator_brand'],
+        ['Creator-commerce / affiliate', 'creator_individual_or_creator_brand'],
+        ['Other creator evidence', 'other'],
+      ],
+      not_creator: [
+        ['Business / company', 'business_or_company'],
+        ['Agency / network', 'agency_or_network'],
+        ['Media / editorial publisher', 'publisher_or_media'],
+        ['Utility or non-creator site', 'utility_or_non_creator'],
+        ['Not enough creator evidence', 'insufficient_information'],
+        ['Other', 'other'],
+      ],
+      unsure: [
+        ['Missing or weak website', 'insufficient_information'],
+        ['Missing or weak description', 'insufficient_information'],
+        ['Conflicting signals', 'insufficient_information'],
+        ['Needs manual escalation', 'insufficient_information'],
+        ['Other', 'other'],
+      ],
+    };
+
+    const DECISION_META = {
+      creator: { title: 'Creator', subtitle: 'You think this publisher belongs in the Influencer / Content Creator cluster.', className: 'accept' },
+      not_creator: { title: 'Not creator', subtitle: 'You think this publisher does not belong in the Influencer / Content Creator cluster.', className: 'reject' },
+      unsure: { title: 'Unsure', subtitle: 'There is not enough evidence to make a confident decision.', className: 'unsure' },
+    };
+
+    function safe(value, fallback = '') {
+      if (value === null || value === undefined) return fallback;
+      return String(value);
+    }
+    function pct(done, total) {
+      if (!total) return '0.0';
+      return ((done / total) * 100).toFixed(1);
+    }
+    function formatScore(value) {
+      if (value === null || value === undefined || value === '') return '—';
+      const num = Number(value);
+      if (Number.isNaN(num)) return String(value);
+      return Number.isInteger(num) ? String(num) : num.toFixed(1);
+    }
+    function normalizeUrl(url) {
+      const u = safe(url).trim();
+      if (!u) return '';
+      if (/^https?:\/\//i.test(u)) return u;
+      return `https://${u}`;
+    }
+    function extractDomain(url) {
+      const u = normalizeUrl(url);
+      if (!u) return '';
+      try { return new URL(u).hostname.replace(/^www\./, ''); } catch (_) { return u.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]; }
+    }
+    function bucketChip(bucket) {
+      if (['p1_current_cluster_strong','p3_hidden_positive_strong'].includes(bucket)) return 'green';
+      if (['p2_current_cluster','p4_hidden_positive'].includes(bucket)) return 'blue';
+      if (['p5_adjacent_supported','p6_social_and_keyword'].includes(bucket)) return 'amber';
+      return 'slate';
+    }
+    function confidenceChip(conf) {
+      if (conf === 'likely_creator') return 'green';
+      if (conf === 'possible_creator') return 'blue';
+      if (conf === 'creator_commercial_business_like') return 'amber';
+      if (conf === 'likely_not_creator') return 'red';
+      return 'slate';
+    }
+
+    async function apiGet(path) {
+      const res = await fetch(path, { credentials: 'include' });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+    async function apiPost(path, body) {
+      const res = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        let msg = await res.text();
+        try { msg = JSON.parse(msg).detail || msg; } catch (_) {}
+        throw new Error(msg);
+      }
+      return res.json();
+    }
+
+    function Topbar({ progress, reviewer }) {
+      const total = Number(progress?.total_rows || 0);
+      const reviewed = Number(progress?.reviewed_rows || 0);
+      const percent = pct(reviewed, total);
+      const remaining = Math.max(total - reviewed, 0);
+      return e('div', { className: 'topbar' },
+        e('div', { className: 'brand-row' },
+          e('div', { className: 'logo-orb' }, 'IR'),
+          e('div', null,
+            e('div', { className: 'brand-title' }, 'Influencer / Content Creator Review'),
+            e('div', { className: 'brand-subtitle' }, `${remaining} cards left · keyboard shortcuts enabled`)
+          )
+        ),
+        e('div', { className: 'progress-zone' },
+          e('div', { className: 'progress-label' },
+            e('span', null, `${reviewed} / ${total} reviewed`),
+            e('span', null, `${percent}% complete`)
+          ),
+          e('div', { className: 'progress-track' }, e('div', { className: 'progress-fill', style: { width: `${percent}%` } }))
+        ),
+        e('div', { className: 'reviewer-badge' },
+          e('div', { className: 'reviewer-label' }, 'Signed in as'),
+          e('div', { className: 'reviewer-name' }, safe(reviewer?.reviewer_name, 'Reviewer')),
+          e('div', { className: 'reviewer-email' }, safe(reviewer?.reviewer_email, ''))
+        )
+      );
+    }
+    function Chip({ label, color }) { return e('span', { className: `chip ${color || 'slate'}` }, label); }
+
+    function Flashcard({ row, index, total, remaining, direction, decision }) {
+      if (!row) return null;
+      const website = normalizeUrl(row.PublisherWebSite);
+      const domain = extractDomain(row.PublisherWebSite);
+      const bucket = safe(row.priority_bucket);
+      const conf = safe(row.review_confidence_hint);
+      const bucketLabel = safe(row.priority_bucket_label, bucket || 'Priority bucket');
+      const confLabel = safe(row.review_confidence_hint_label, conf || 'No hint');
+      const description = safe(row.PublisherDescription, 'No description provided.');
+      const activeClass = decision ? `${DECISION_META[decision].className}-active` : '';
+      const evidence = safe(row.review_evidence_summary, 'No evidence summary available.');
+      const compactEvidence = evidence.length > 130 ? `${evidence.slice(0, 130)}…` : evidence;
+
+      return e('div', { className: 'card-wrap' },
+        e('div', { className: 'card-stack' },
+          e('div', { key: `${row.review_batch_id}-${row.PublisherKey}-${index}`, className: `flashcard ${direction === 'prev' ? 'slide-prev' : 'slide-next'} ${activeClass}` },
+            e('div', { className: 'card-kicker' }, `Card ${index + 1} of ${total} unreviewed · ${remaining} remaining`),
+            e('div', { className: 'chip-row' },
+              e(Chip, { label: bucketLabel, color: bucketChip(bucket) }),
+              e(Chip, { label: confLabel, color: confidenceChip(conf) }),
+              e(Chip, { label: `Website: ${safe(row.website_type, 'unknown')}`, color: 'slate' })
+            ),
+            e('div', { className: 'publisher-title' }, safe(row.Publisher, 'Unknown publisher')),
+            e('div', { className: 'publisher-site' }, website ? e('a', { href: website, target: '_blank', rel: 'noopener noreferrer' }, domain || website) : 'No website provided'),
+            e('div', { className: 'description' }, description),
+            e('div', { className: 'stats-grid' },
+              e('div', { className: 'stat' }, e('div', { className: 'stat-label' }, 'Current type'), e('div', { className: 'stat-value' }, safe(row.current_publisher_type_group, '—'))),
+              e('div', { className: 'stat' }, e('div', { className: 'stat-label' }, 'Current subvertical'), e('div', { className: 'stat-value' }, safe(row.current_publisher_subvertical, '—'))),
+              e('div', { className: 'stat' }, e('div', { className: 'stat-label' }, 'Evidence / risk'), e('div', { className: 'stat-value' }, `${formatScore(row.creator_evidence_score)} / ${formatScore(row.non_creator_risk_score)}`))
+            ),
+            e('div', { className: 'evidence-strip' }, e('span', { className: 'evidence-dot' }), e('span', null, compactEvidence))
+          )
+        )
+      );
+    }
+
+    function ContextPanel({ row }) {
+      const [open, setOpen] = useState(false);
+      if (!row) return null;
+      return e('div', { className: 'context-card' },
+        e('button', { className: 'context-toggle', onClick: () => setOpen(!open) },
+          e('span', null, open ? 'Hide review context' : 'Why this card was selected'),
+          e('span', null, open ? '⌃' : '⌄')
+        ),
+        open && e('div', { className: 'context-body' },
+          e('div', { className: 'context-row' }, e('div', { className: 'context-label' }, 'Why this publisher is here'), e('div', { className: 'context-value' }, safe(row.priority_bucket_description, 'No bucket explanation available.'))),
+          e('div', { className: 'context-row' }, e('div', { className: 'context-label' }, 'Reviewer guidance'), e('div', { className: 'context-value' }, safe(row.reviewer_guidance_hint, 'Reviewer should inspect manually.'))),
+          e('div', { className: 'context-row' }, e('div', { className: 'context-label' }, 'Evidence detected'), e('div', { className: 'context-value' }, safe(row.review_evidence_summary, 'No evidence summary available.'))),
+          safe(row.reviewer_warning_message) && e('div', { className: 'warning-box' }, safe(row.reviewer_warning_message)),
+          e('div', { className: 'context-note' }, 'These are supporting signals only. The final decision should still be based on reviewer judgement.')
+        )
+      );
+    }
+
+    function ActionButtons({ selected, onDecision }) {
+      return e(React.Fragment, null,
+        e('div', { className: 'action-help' }, 'Browse freely with the side arrows. Choose a decision only when you are ready.'),
+        e('div', { className: 'action-buttons' },
+          e('button', { className: `action-btn reject ${selected === 'not_creator' ? 'active' : ''}`, onClick: () => onDecision('not_creator') }, e('span', { className: 'icon' }, '←'), e('span', null, e('strong', null, 'Not creator'), e('small', null, 'Remove / exclude'))),
+          e('button', { className: `action-btn unsure ${selected === 'unsure' ? 'active' : ''}`, onClick: () => onDecision('unsure') }, e('span', { className: 'icon' }, '?'), e('span', null, e('strong', null, 'Unsure'), e('small', null, 'Needs judgement'))),
+          e('button', { className: `action-btn accept ${selected === 'creator' ? 'active' : ''}`, onClick: () => onDecision('creator') }, e('span', null, e('strong', null, 'Creator'), e('small', null, 'Keep / add')), e('span', { className: 'icon' }, '→'))
+        )
+      );
+    }
+
+    function ReasonPanel({ decision, row, onCancel, onSaved }) {
+      const panelRef = useRef(null);
+      const options = REASON_OPTIONS[decision] || [];
+      const [reason, setReason] = useState(options[0] || ['', '']);
+      const [comment, setComment] = useState('');
+      const [saving, setSaving] = useState(false);
+      const meta = DECISION_META[decision];
+      useEffect(() => {
+        setReason(options[0] || ['', '']);
+        setComment('');
+        setTimeout(() => panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80);
+      }, [decision, row?.PublisherKey]);
+      async function save() {
+        setSaving(true);
+        try {
+          await apiPost('/api/decision', {
+            review_batch_id: row.review_batch_id,
+            PublisherKey: Number(row.PublisherKey),
+            decision_type: decision,
+            review_reason_category: reason[1],
+            review_reason_detail: reason[0],
+            review_comment: comment,
+          });
+          onSaved();
+        } catch (err) {
+          alert(err.message || String(err));
+        } finally { setSaving(false); }
+      }
+      return e('div', { className: 'reason-panel', ref: panelRef },
+        e('div', { className: 'reason-title' }, meta.title),
+        e('div', { className: 'reason-subtitle' }, meta.subtitle),
+        e('div', { className: 'reason-chips' }, options.map(opt => e('button', { key: opt[0], className: `reason-chip ${reason[0] === opt[0] ? 'selected' : ''}`, onClick: () => setReason(opt) }, opt[0]))),
+        e('textarea', { value: comment, onChange: ev => setComment(ev.target.value), placeholder: 'Optional note for ambiguous, misleading, or useful cases…' }),
+        e('div', { className: 'save-row' },
+          e('button', { className: 'save-btn', onClick: save, disabled: saving }, saving ? 'Saving…' : 'Save decision & next'),
+          e('button', { className: 'cancel-btn', onClick: onCancel, disabled: saving }, 'Cancel')
+        )
+      );
+    }
+
+    function App() {
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState('');
+      const [reviewer, setReviewer] = useState(null);
+      const [progress, setProgress] = useState(null);
+      const [queue, setQueue] = useState([]);
+      const [idx, setIdx] = useState(0);
+      const [direction, setDirection] = useState('next');
+      const [decision, setDecision] = useState(null);
+      const [toast, setToast] = useState('');
+
+      async function load() {
+        setError('');
+        try {
+          const data = await apiGet('/api/queue');
+          setReviewer(data.reviewer);
+          setProgress(data.progress);
+          setQueue(data.queue || []);
+          setIdx(prev => Math.min(prev, Math.max((data.queue || []).length - 1, 0)));
+        } catch (err) {
+          setError(err.message || String(err));
+        } finally { setLoading(false); }
+      }
+      useEffect(() => { load(); }, []);
+      const row = queue[idx];
+      const totalCards = queue.length;
+      function next() { if (idx < totalCards - 1) { setDirection('next'); setDecision(null); setIdx(idx + 1); } }
+      function prev() { if (idx > 0) { setDirection('prev'); setDecision(null); setIdx(idx - 1); } }
+      function chooseDecision(d) { setDecision(d); }
+      async function saved() {
+        setDecision(null);
+        setToast('Decision saved');
+        await load();
+        setTimeout(() => setToast(''), 2200);
+      }
+      useEffect(() => {
+        const handler = ev => {
+          if (['TEXTAREA', 'INPUT'].includes(document.activeElement?.tagName)) return;
+          if (ev.key === 'ArrowRight') next();
+          if (ev.key === 'ArrowLeft') prev();
+          if (ev.key.toLowerCase() === 'a') chooseDecision('creator');
+          if (ev.key.toLowerCase() === 'd') chooseDecision('not_creator');
+          if (ev.key.toLowerCase() === 's') chooseDecision('unsure');
+          if (ev.key === 'Escape') setDecision(null);
+        };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+      }, [idx, totalCards, row]);
+
+      if (loading) return e('div', { className: 'app-shell' }, e('div', { className: 'empty-state' }, 'Loading review queue…'));
+      if (error) return e('div', { className: 'app-shell' }, e('div', { className: 'error-card' }, error));
+      if (!row) return e('div', { className: 'app-shell' }, e(Topbar, { progress, reviewer }), e('div', { className: 'empty-state' }, 'All publishers in this review batch have been reviewed.'));
+
+      return e('div', { className: 'app-shell' },
+        e(Topbar, { progress, reviewer }),
+        e('main', { className: 'main-view' },
+          e('div', { className: 'stage' },
+            e('button', { className: 'nav-button', onClick: prev, disabled: idx <= 0, title: 'Previous card' }, '‹'),
+            e(Flashcard, { row, index: idx, total: totalCards, remaining: totalCards, direction, decision }),
+            e('button', { className: 'nav-button', onClick: next, disabled: idx >= totalCards - 1, title: 'Next card' }, '›')
+          ),
+          e(ContextPanel, { row }),
+          e(ActionButtons, { selected: decision, onDecision: chooseDecision }),
+          e('div', { className: 'shortcuts' }, 'Shortcuts: ← previous · → next · A creator · D not creator · S unsure · Esc cancel'),
+          decision && e(ReasonPanel, { decision, row, onCancel: () => setDecision(null), onSaved: saved })
+        ),
+        toast && e('div', { className: 'toast' }, toast)
+      );
+    }
+    ReactDOM.createRoot(document.getElementById('root')).render(e(App));
+  </script>
+</body>
+</html>
+'''
+
+
+@app.get("/", response_class=HTMLResponse)
+def root():
+    return HTMLResponse(INDEX_HTML)
