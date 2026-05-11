@@ -461,6 +461,8 @@ INDEX_HTML = r'''
       --bg0: #050B15;
       --bg1: #07111F;
       --bg2: #0B1729;
+      --panel: rgba(8, 18, 32, 0.72);
+      --panel2: rgba(10, 23, 41, 0.84);
       --text: #F8FAFC;
       --muted: #A9BAD4;
       --soft: #C7D2FE;
@@ -470,7 +472,9 @@ INDEX_HTML = r'''
       --green: #34D399;
       --amber: #FBBF24;
       --red: #FB7185;
-      --border: rgba(148, 163, 184, 0.17);
+      --purple: #A78BFA;
+      --border: rgba(148, 163, 184, 0.16);
+      --border2: rgba(126, 167, 255, 0.22);
       --shadow: 0 24px 72px rgba(0,0,0,0.42);
       --radius: 30px;
     }
@@ -481,9 +485,9 @@ INDEX_HTML = r'''
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       color: var(--text);
       background:
-        radial-gradient(circle at 14% 6%, rgba(96, 165, 250, 0.23), transparent 27%),
-        radial-gradient(circle at 85% 10%, rgba(45, 212, 191, 0.16), transparent 28%),
-        radial-gradient(circle at 50% 95%, rgba(124, 58, 237, 0.14), transparent 24%),
+        radial-gradient(circle at 12% 5%, rgba(96, 165, 250, 0.24), transparent 27%),
+        radial-gradient(circle at 88% 9%, rgba(45, 212, 191, 0.17), transparent 29%),
+        radial-gradient(circle at 52% 97%, rgba(124, 58, 237, 0.15), transparent 25%),
         linear-gradient(135deg, #050B15 0%, #07111F 45%, #10152B 100%);
       overflow-x: hidden;
     }
@@ -493,37 +497,50 @@ INDEX_HTML = r'''
       inset: 0;
       pointer-events: none;
       background-image:
-        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+        linear-gradient(rgba(255,255,255,0.026) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.026) 1px, transparent 1px);
       background-size: 56px 56px;
       mask-image: radial-gradient(circle at center, black, transparent 78%);
     }
+    button, textarea { font-family: inherit; }
     .app-shell {
       min-height: 100vh;
-      padding: 16px 24px 30px;
+      padding: 16px 24px 34px;
       position: relative;
     }
+    .ambient-glow {
+      position: fixed;
+      width: 420px;
+      height: 420px;
+      border-radius: 999px;
+      pointer-events: none;
+      filter: blur(22px);
+      opacity: .12;
+      background: linear-gradient(135deg, var(--blue), var(--teal));
+      right: -140px;
+      top: 110px;
+    }
     .topbar {
-      max-width: 1160px;
-      margin: 0 auto 16px;
+      max-width: 1180px;
+      margin: 0 auto 18px;
       display: grid;
-      grid-template-columns: minmax(310px, 1fr) minmax(260px, 0.8fr) minmax(220px, 0.7fr);
+      grid-template-columns: minmax(330px, 1fr) minmax(300px, 0.9fr) minmax(230px, 0.7fr);
       align-items: center;
-      gap: 18px;
+      gap: 20px;
       border: 1px solid var(--border);
       background:
         radial-gradient(circle at 92% 20%, rgba(45,212,191,0.12), transparent 30%),
         linear-gradient(135deg, rgba(10, 22, 39, 0.86), rgba(7, 15, 28, 0.91));
-      border-radius: 24px;
+      border-radius: 26px;
       box-shadow: 0 20px 56px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.06);
       backdrop-filter: blur(18px);
       padding: 14px 18px;
     }
     .brand-row { display: flex; align-items: center; gap: 14px; }
     .logo-orb {
-      width: 44px;
-      height: 44px;
-      border-radius: 16px;
+      width: 46px;
+      height: 46px;
+      border-radius: 17px;
       background:
         radial-gradient(circle at 30% 25%, #E0F2FE, transparent 24%),
         linear-gradient(135deg, #2563EB, #14B8A6 78%);
@@ -533,17 +550,17 @@ INDEX_HTML = r'''
       font-weight: 950;
       letter-spacing: -0.08em;
     }
-    .brand-title { font-size: 1.02rem; font-weight: 950; letter-spacing: -0.03em; line-height: 1.1; }
-    .brand-subtitle { margin-top: 4px; color: #BFD0EA; font-size: 0.80rem; font-weight: 600; }
-    .progress-zone { min-width: 260px; }
-    .progress-label { display: flex; justify-content: space-between; font-size: 0.78rem; color: #D6E4FF; margin-bottom: 8px; font-weight: 800; }
+    .brand-title { font-size: 1.04rem; font-weight: 950; letter-spacing: -0.03em; line-height: 1.1; }
+    .brand-subtitle { margin-top: 4px; color: #BFD0EA; font-size: 0.80rem; font-weight: 650; }
+    .progress-zone { min-width: 270px; }
+    .progress-label { display: flex; justify-content: space-between; font-size: 0.78rem; color: #D6E4FF; margin-bottom: 8px; font-weight: 850; }
     .progress-track { width: 100%; height: 8px; background: rgba(148, 163, 184, 0.13); border-radius: 999px; overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,0.28); }
     .progress-fill { height: 8px; border-radius: 999px; background: linear-gradient(90deg, var(--blue), var(--cyan), var(--teal)); box-shadow: 0 0 20px rgba(34, 211, 238, 0.34); transition: width 450ms ease; }
     .reviewer-badge { text-align: right; min-width: 205px; }
-    .reviewer-label { color: #90A7C8; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.64rem; font-weight: 900; }
+    .reviewer-label { color: #90A7C8; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.64rem; font-weight: 950; }
     .reviewer-name { color: #F8FAFC; font-size: 0.92rem; font-weight: 900; margin-top: 4px; }
     .reviewer-email { color: #93C5FD; font-size: 0.76rem; font-weight: 650; margin-top: 2px; }
-    .main-view { max-width: 1160px; margin: 0 auto; }
+    .main-view { max-width: 1180px; margin: 0 auto; }
     .stage { display: grid; grid-template-columns: 56px minmax(0, 1fr) 56px; gap: 14px; align-items: center; }
     .nav-button {
       width: 50px; height: 50px; border-radius: 999px; border: 1px solid rgba(147, 197, 253, 0.25); color: #E0F2FE;
@@ -554,41 +571,23 @@ INDEX_HTML = r'''
     .nav-button:hover:not(:disabled) { transform: translateY(-2px) scale(1.04); border-color: rgba(147, 197, 253, 0.75); box-shadow: 0 20px 48px rgba(96,165,250,0.18); }
     .nav-button:disabled { opacity: 0.18; cursor: not-allowed; }
     .card-wrap { perspective: 1200px; position: relative; }
-    .card-stack {
-      position: relative;
-      max-width: 800px;
-      margin: 0 auto;
-    }
+    .card-stack { position: relative; max-width: 840px; margin: 0 auto; }
     .card-stack:before, .card-stack:after {
-      content: "";
-      position: absolute;
-      left: 26px;
-      right: 26px;
-      height: 100%;
-      border-radius: var(--radius);
-      background: rgba(20, 38, 64, 0.36);
-      border: 1px solid rgba(126, 167, 255, 0.10);
-      pointer-events: none;
+      content: ""; position: absolute; left: 26px; right: 26px; height: 100%; border-radius: var(--radius);
+      background: rgba(20, 38, 64, 0.36); border: 1px solid rgba(126, 167, 255, 0.10); pointer-events: none;
     }
     .card-stack:before { top: 12px; transform: scale(0.975); opacity: 0.38; }
     .card-stack:after { top: 24px; transform: scale(0.945); opacity: 0.20; }
     .flashcard {
-      max-width: 800px;
-      min-height: 386px;
-      margin: 0 auto;
-      border: 1px solid rgba(126, 167, 255, 0.24);
-      border-radius: var(--radius);
+      max-width: 840px; min-height: 440px; margin: 0 auto; border: 1px solid rgba(126, 167, 255, 0.24); border-radius: var(--radius);
       background:
         radial-gradient(circle at 88% 8%, rgba(20,184,166,0.22), transparent 28%),
         radial-gradient(circle at 8% 96%, rgba(96,165,250,0.17), transparent 28%),
         linear-gradient(145deg, rgba(18,31,52,0.96), rgba(8,17,31,0.98));
       box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
-      padding: 26px 30px 22px;
-      overflow: hidden;
-      position: relative;
-      z-index: 2;
-      transition: border-color 260ms ease, box-shadow 260ms ease;
+      padding: 24px 30px 22px; overflow: hidden; position: relative; z-index: 2; transition: border-color 260ms ease, box-shadow 260ms ease;
     }
+    .flashcard:after { content: ""; position: absolute; inset: auto -120px -140px auto; width: 260px; height: 260px; background: radial-gradient(circle, rgba(34,211,238,.13), transparent 70%); pointer-events: none; }
     .flashcard.accept-active { border-color: rgba(45,212,191,0.52); box-shadow: 0 24px 72px rgba(20,184,166,0.20), var(--shadow); }
     .flashcard.reject-active { border-color: rgba(248,113,113,0.52); box-shadow: 0 24px 72px rgba(220,38,38,0.20), var(--shadow); }
     .flashcard.unsure-active { border-color: rgba(251,191,36,0.52); box-shadow: 0 24px 72px rgba(245,158,11,0.18), var(--shadow); }
@@ -596,34 +595,49 @@ INDEX_HTML = r'''
     .slide-prev { animation: slidePrev 300ms cubic-bezier(.2,.8,.2,1); }
     @keyframes slideNext { from { opacity: 0; transform: translateX(24px) rotateY(-3deg) scale(.992); filter: blur(2px); } to { opacity: 1; transform: translateX(0) rotateY(0) scale(1); filter: blur(0); } }
     @keyframes slidePrev { from { opacity: 0; transform: translateX(-24px) rotateY(3deg) scale(.992); filter: blur(2px); } to { opacity: 1; transform: translateX(0) rotateY(0) scale(1); filter: blur(0); } }
-    .card-kicker { color: #A8BEDD; font-size: 0.72rem; font-weight: 950; letter-spacing: 0.10em; text-transform: uppercase; margin-bottom: 12px; }
-    .chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .card-topline { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; margin-bottom: 12px; }
+    .card-kicker { color: #A8BEDD; font-size: 0.72rem; font-weight: 950; letter-spacing: 0.10em; text-transform: uppercase; }
+    .impact-pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 11px; border-radius: 999px; background: rgba(45,212,191,.09); border: 1px solid rgba(45,212,191,.16); color: #CFFAFE; font-size: .75rem; font-weight: 900; max-width: 270px; line-height: 1.25; }
+    .impact-dot { width: 8px; height: 8px; border-radius: 999px; background: linear-gradient(135deg, var(--cyan), var(--teal)); box-shadow: 0 0 14px rgba(34,211,238,.45); flex: none; }
+    .chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
     .chip { border-radius: 999px; padding: 6px 10px; font-size: 0.72rem; font-weight: 900; border: 1px solid transparent; white-space: nowrap; }
     .chip.green { background: rgba(16,185,129,.17); color: #BBF7D0; border-color: rgba(74,222,128,.24); }
     .chip.blue { background: rgba(59,130,246,.16); color: #BFD7FF; border-color: rgba(96,165,250,.26); }
     .chip.amber { background: rgba(245,158,11,.17); color: #FCD9A6; border-color: rgba(251,191,36,.26); }
     .chip.red { background: rgba(239,68,68,.16); color: #FECACA; border-color: rgba(248,113,113,.24); }
     .chip.slate { background: rgba(148,163,184,.13); color: #D7E0EC; border-color: rgba(203,213,225,.13); }
-    .publisher-title { font-size: clamp(2rem, 4.3vw, 2.55rem); font-weight: 950; letter-spacing: -0.055em; line-height: 1.02; margin: 0 0 10px; }
+    .publisher-title { font-size: clamp(2rem, 4.1vw, 2.52rem); font-weight: 950; letter-spacing: -0.055em; line-height: 1.02; margin: 0 0 10px; }
     .publisher-site a { color: #9EC5FF; font-weight: 850; text-decoration: none; }
     .publisher-site a:hover { text-decoration: underline; }
-    .description { margin-top: 18px; border: 1px solid rgba(255,255,255,0.06); background: rgba(5, 13, 25, 0.58); border-radius: 22px; padding: 16px 18px; line-height: 1.48; color: #F1F6FF; font-size: 1.02rem; max-height: 112px; overflow-y: auto; }
-    .stats-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
-    .stat { background: rgba(6, 14, 26, 0.62); border: 1px solid rgba(255,255,255,0.06); border-radius: 18px; padding: 12px 14px; }
-    .stat-label { color: #9EC5FF; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 950; margin-bottom: 6px; }
-    .stat-value { color: #FFFFFF; font-weight: 900; font-size: .96rem; }
-    .evidence-strip { margin-top: 16px; display: flex; gap: 10px; align-items: center; color: #C7D2FE; font-size: 0.80rem; line-height: 1.35; background: rgba(59,130,246,0.08); border: 1px solid rgba(96,165,250,0.11); border-radius: 18px; padding: 11px 12px; }
-    .evidence-dot { width: 8px; height: 8px; border-radius: 999px; background: linear-gradient(135deg, var(--cyan), var(--teal)); box-shadow: 0 0 14px rgba(34,211,238,0.45); flex: none; }
-    .context-card { max-width: 840px; margin: 14px auto 0; border: 1px solid rgba(148, 163, 184, 0.15); background: rgba(6, 14, 26, 0.62); border-radius: 20px; overflow: hidden; }
-    .context-toggle { width: 100%; background: transparent; border: 0; color: #EAF2FF; padding: 15px 18px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; font-weight: 900; font-size: 0.92rem; }
+    .description { margin-top: 17px; border: 1px solid rgba(255,255,255,0.06); background: rgba(5, 13, 25, 0.58); border-radius: 22px; padding: 15px 17px; line-height: 1.48; color: #F1F6FF; font-size: 1.02rem; max-height: 105px; overflow-y: auto; }
+    .stats-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
+    .stat { background: rgba(6, 14, 26, 0.62); border: 1px solid rgba(255,255,255,0.06); border-radius: 18px; padding: 11px 12px; min-width: 0; }
+    .stat-label { color: #9EC5FF; font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 950; margin-bottom: 6px; }
+    .stat-value { color: #FFFFFF; font-weight: 900; font-size: .88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .card-intel { margin-top: 16px; display: grid; grid-template-columns: 1.15fr .85fr; gap: 10px; }
+    .intel-box { background: rgba(59,130,246,0.075); border: 1px solid rgba(96,165,250,0.11); border-radius: 18px; padding: 11px 12px; min-width: 0; }
+    .intel-label { color: #93C5FD; text-transform: uppercase; letter-spacing: .08em; font-size: .65rem; font-weight: 950; margin-bottom: 6px; }
+    .intel-value { color: #DDEAFE; font-size: .82rem; line-height: 1.35; }
+    .mini-chipline { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .mini-chip { border-radius: 999px; padding: 5px 8px; font-size: .68rem; font-weight: 850; color: #DDEAFE; background: rgba(148,163,184,.10); border: 1px solid rgba(148,163,184,.13); }
+    .mini-chip.good { color: #BBF7D0; background: rgba(16,185,129,.12); border-color: rgba(74,222,128,.20); }
+    .mini-chip.warn { color: #FCD9A6; background: rgba(245,158,11,.13); border-color: rgba(251,191,36,.22); }
+    .mini-chip.risk { color: #FECACA; background: rgba(239,68,68,.13); border-color: rgba(248,113,113,.22); }
+    .context-card { max-width: 900px; margin: 14px auto 0; border: 1px solid rgba(148, 163, 184, 0.15); background: rgba(6, 14, 26, 0.62); border-radius: 22px; overflow: hidden; }
+    .context-toggle { width: 100%; background: transparent; border: 0; color: #EAF2FF; padding: 16px 18px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; font-weight: 950; font-size: 0.94rem; }
     .context-toggle span { color: #93C5FD; }
     .context-body { border-top: 1px solid rgba(148, 163, 184, 0.11); padding: 18px; animation: drawerOpen 240ms ease-out; }
     @keyframes drawerOpen { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
-    .context-row { margin-bottom: 14px; }
-    .context-label { color: #93C5FD; font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 950; margin-bottom: 5px; }
-    .context-value { color: #F8FAFC; line-height: 1.45; }
-    .warning-box { margin-top: 10px; background: rgba(245,158,11,.14); border: 1px solid rgba(251,191,36,.25); color: #FCD9A6; border-radius: 14px; padding: 10px 12px; font-weight: 800; }
-    .context-note { color: #BFD0EA; font-size: .82rem; margin-top: 10px; }
+    .context-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .context-section { border: 1px solid rgba(148,163,184,.12); background: rgba(10, 23, 41, .48); border-radius: 18px; padding: 14px; }
+    .context-label { color: #93C5FD; font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 950; margin-bottom: 8px; }
+    .context-value { color: #F8FAFC; line-height: 1.45; font-size: .91rem; }
+    .kv-grid { display: grid; grid-template-columns: 120px 1fr; gap: 6px 10px; color: #EAF2FF; font-size: .86rem; }
+    .kv-key { color: #91A9C9; font-weight: 800; }
+    .kv-val { color: #F8FAFC; font-weight: 760; overflow-wrap: anywhere; }
+    .flag-cloud { display: flex; flex-wrap: wrap; gap: 7px; }
+    .warning-box { margin-top: 10px; background: rgba(245,158,11,.14); border: 1px solid rgba(251,191,36,.25); color: #FCD9A6; border-radius: 14px; padding: 10px 12px; font-weight: 850; }
+    .context-note { color: #BFD0EA; font-size: .82rem; margin-top: 12px; }
     .action-help { text-align: center; color: #CAD7EA; font-size: .84rem; font-weight: 800; margin: 16px 0 10px; }
     .action-buttons { max-width: 980px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
     .action-btn { min-height: 68px; border-radius: 24px; border: 1px solid transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 14px; color: white; font-weight: 950; box-shadow: 0 18px 44px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.08); transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, filter 180ms ease; }
@@ -634,34 +648,34 @@ INDEX_HTML = r'''
     .action-btn.unsure { background: radial-gradient(circle at 20% 20%, rgba(251,191,36,.34), transparent 44%), linear-gradient(135deg, rgba(120,53,15,.96), rgba(69,26,3,.98)); border-color: rgba(251,191,36,.44); color: #FEF3C7; }
     .action-btn.accept { background: radial-gradient(circle at 20% 20%, rgba(45,212,191,.32), transparent 44%), linear-gradient(135deg, rgba(6,95,70,.96), rgba(20,83,45,.98)); border-color: rgba(45,212,191,.44); color: #CCFBF1; }
     .action-btn:hover { transform: translateY(-2px) scale(1.01); filter: saturate(1.08); }
-    .action-btn.active { outline: 2px solid rgba(255,255,255,.36); box-shadow: 0 20px 56px rgba(34,211,238,.16), inset 0 1px 0 rgba(255,255,255,.16); }
-    .reason-panel { max-width: 850px; margin: 18px auto 0; border: 1px solid rgba(148, 163, 184, 0.17); background: linear-gradient(135deg, rgba(10,22,39,.90), rgba(7,15,28,.92)); border-radius: 26px; box-shadow: 0 22px 60px rgba(0,0,0,.34); padding: 20px; animation: panelRise 300ms cubic-bezier(.2,.8,.2,1); }
-    @keyframes panelRise { from { opacity: 0; transform: translateY(24px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
-    .reason-title { font-size: 1.1rem; font-weight: 950; }
-    .reason-subtitle { color: #BFD0EA; font-size: .86rem; margin-top: 4px; }
-    .reason-chips { display: flex; flex-wrap: wrap; gap: 9px; margin: 16px 0; }
-    .reason-chip { border: 1px solid rgba(148,163,184,.20); background: rgba(15,23,42,.82); color: #EAF2FF; border-radius: 999px; padding: 9px 12px; font-weight: 850; cursor: pointer; transition: all 180ms ease; }
-    .reason-chip:hover { border-color: rgba(96,165,250,.58); transform: translateY(-1px); }
-    .reason-chip.selected { background: rgba(96,165,250,.22); border-color: rgba(147,197,253,.72); color: #FFFFFF; }
-    textarea { width: 100%; min-height: 82px; resize: vertical; border-radius: 18px; border: 1px solid rgba(148,163,184,.18); background: rgba(6,14,26,.80); color: #F8FAFC; padding: 13px 14px; font-family: inherit; outline: none; }
-    textarea::placeholder { color: #8FA6C6; }
-    .save-row { display: flex; gap: 12px; margin-top: 12px; }
-    .save-btn, .cancel-btn { border-radius: 18px; min-height: 46px; padding: 0 18px; border: 1px solid rgba(148,163,184,.18); color: #F8FAFC; font-weight: 900; cursor: pointer; }
-    .save-btn { flex: 1; background: linear-gradient(135deg, rgba(37,99,235,.95), rgba(20,184,166,.88)); box-shadow: 0 16px 36px rgba(34,211,238,.18); }
-    .cancel-btn { background: rgba(15,23,42,.72); }
-    .shortcuts { text-align: center; margin-top: 12px; color: #8FA6C6; font-size: .76rem; font-weight: 750; }
-    .toast { position: fixed; right: 24px; bottom: 24px; z-index: 20; background: rgba(8,17,31,.94); border: 1px solid rgba(45,212,191,.34); color: #CCFBF1; border-radius: 18px; padding: 12px 14px; box-shadow: 0 18px 46px rgba(0,0,0,.36); animation: toastIn 240ms ease-out; }
-    @keyframes toastIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    .error-card, .empty-state { max-width: 760px; margin: 60px auto; padding: 24px; border-radius: 24px; border: 1px solid rgba(248,113,113,.24); background: rgba(127,29,29,.16); color: #FEE2E2; }
-    @media (max-width: 900px) {
-      .app-shell { padding: 12px 14px 24px; }
-      .topbar { grid-template-columns: 1fr; }
+    .action-btn.active { outline: 2px solid rgba(255,255,255,.58); outline-offset: 3px; }
+    .shortcuts { margin: 10px auto 0; text-align: center; color: #93A8C7; font-size: .76rem; font-weight: 750; }
+    .reason-panel { max-width: 860px; margin: 18px auto 0; border: 1px solid rgba(126,167,255,.22); background: linear-gradient(145deg, rgba(11,23,40,.92), rgba(7,15,28,.96)); border-radius: 24px; padding: 18px; box-shadow: 0 24px 72px rgba(0,0,0,.34); animation: reasonRise 260ms ease-out; }
+    @keyframes reasonRise { from { opacity: 0; transform: translateY(18px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    .reason-title { font-size: 1.05rem; font-weight: 950; margin-bottom: 4px; }
+    .reason-subtitle { color: #BFD0EA; font-size: .86rem; margin-bottom: 14px; }
+    .reason-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+    .reason-chip { border: 1px solid rgba(148,163,184,.18); background: rgba(148,163,184,.10); color: #EAF2FF; padding: 9px 11px; border-radius: 999px; cursor: pointer; font-weight: 850; }
+    .reason-chip.selected { border-color: rgba(45,212,191,.52); background: rgba(20,184,166,.16); color: #CCFBF1; }
+    textarea { width: 100%; min-height: 86px; resize: vertical; color: #F8FAFC; background: rgba(6,14,26,.72); border: 1px solid rgba(148,163,184,.16); border-radius: 18px; padding: 12px; font-size: .94rem; outline: none; }
+    textarea:focus { border-color: rgba(96,165,250,.58); }
+    .save-row { display: flex; gap: 10px; margin-top: 12px; }
+    .save-btn, .cancel-btn { border: 0; cursor: pointer; border-radius: 16px; padding: 12px 16px; font-weight: 950; }
+    .save-btn { flex: 1; background: linear-gradient(135deg, #2563EB, #14B8A6); color: #FFFFFF; box-shadow: 0 16px 36px rgba(37,99,235,.22); }
+    .cancel-btn { background: rgba(148,163,184,.12); color: #EAF2FF; border: 1px solid rgba(148,163,184,.16); }
+    .toast { position: fixed; right: 24px; bottom: 24px; border-radius: 16px; padding: 12px 14px; background: rgba(6,95,70,.94); color: #CCFBF1; border: 1px solid rgba(45,212,191,.32); box-shadow: 0 20px 48px rgba(0,0,0,.35); font-weight: 900; }
+    .empty-state, .error-card { max-width: 760px; margin: 80px auto; border: 1px solid var(--border); background: var(--panel); border-radius: 24px; padding: 28px; text-align: center; color: #EAF2FF; }
+    .error-card { color: #FECACA; border-color: rgba(248,113,113,.30); }
+    @media (max-width: 960px) {
+      .topbar { grid-template-columns: 1fr; text-align: left; }
       .reviewer-badge { text-align: left; }
-      .stage { grid-template-columns: 42px minmax(0,1fr) 42px; gap: 8px; }
+      .stage { grid-template-columns: 42px 1fr 42px; gap: 8px; }
       .nav-button { width: 42px; height: 42px; font-size: 1.55rem; }
-      .flashcard { padding: 20px; min-height: auto; }
-      .stats-grid, .action-buttons { grid-template-columns: 1fr; }
+      .stats-grid, .card-intel, .context-grid, .action-buttons { grid-template-columns: 1fr; }
       .publisher-title { font-size: 2rem; }
+      .flashcard { min-height: 0; padding: 22px; }
+      .card-topline { flex-direction: column; align-items: flex-start; }
+      .impact-pill { max-width: none; }
     }
   </style>
 </head>
@@ -697,40 +711,43 @@ INDEX_HTML = r'''
     };
 
     const DECISION_META = {
-      creator: { title: 'Creator', subtitle: 'You think this publisher belongs in the Influencer / Content Creator cluster.', className: 'accept' },
-      not_creator: { title: 'Not creator', subtitle: 'You think this publisher does not belong in the Influencer / Content Creator cluster.', className: 'reject' },
-      unsure: { title: 'Unsure', subtitle: 'There is not enough evidence to make a confident decision.', className: 'unsure' },
+      creator: { title: 'Creator', subtitle: 'Confirm this publisher genuinely belongs in the Influencer / Content Creator cluster.' },
+      not_creator: { title: 'Not creator', subtitle: 'Confirm this publisher should be excluded or removed from the cluster.' },
+      unsure: { title: 'Unsure', subtitle: 'Use this when evidence is incomplete, conflicting, or requires escalation.' },
     };
 
-    function safe(value, fallback = '') {
-      if (value === null || value === undefined) return fallback;
-      return String(value);
+    function safe(v, fallback = '') {
+      if (v === null || v === undefined || Number.isNaN(v)) return fallback;
+      const s = String(v).trim();
+      return s || fallback;
     }
-    function pct(done, total) {
-      if (!total) return '0.0';
-      return ((done / total) * 100).toFixed(1);
+    function bool(v) {
+      if (v === true) return true;
+      return ['true', '1', 'yes', 'y'].includes(String(v || '').toLowerCase());
     }
-    function formatScore(value) {
-      if (value === null || value === undefined || value === '') return '—';
-      const num = Number(value);
-      if (Number.isNaN(num)) return String(value);
-      return Number.isInteger(num) ? String(num) : num.toFixed(1);
+    function formatScore(v) {
+      if (v === null || v === undefined || v === '') return '—';
+      const n = Number(v);
+      return Number.isFinite(n) ? String(Math.round(n)) : String(v);
     }
-    function normalizeUrl(url) {
-      const u = safe(url).trim();
-      if (!u) return '';
-      if (/^https?:\/\//i.test(u)) return u;
-      return `https://${u}`;
+    function pct(progress) {
+      const total = Number(progress?.total_rows || 0);
+      const reviewed = Number(progress?.reviewed_rows || 0);
+      if (!total) return 0;
+      return Math.round((reviewed / total) * 1000) / 10;
     }
-    function extractDomain(url) {
-      const u = normalizeUrl(url);
-      if (!u) return '';
-      try { return new URL(u).hostname.replace(/^www\./, ''); } catch (_) { return u.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]; }
+    function domainFor(url) {
+      const raw = safe(url);
+      if (!raw) return '';
+      try {
+        const u = new URL(raw.startsWith('http') ? raw : `https://${raw}`);
+        return u.hostname.replace(/^www\./, '');
+      } catch { return raw.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]; }
     }
     function bucketChip(bucket) {
-      if (['p1_current_cluster_strong','p3_hidden_positive_strong'].includes(bucket)) return 'green';
-      if (['p2_current_cluster','p4_hidden_positive'].includes(bucket)) return 'blue';
-      if (['p5_adjacent_supported','p6_social_and_keyword'].includes(bucket)) return 'amber';
+      if (['p1_current_cluster_strong', 'p3_hidden_positive_strong'].includes(bucket)) return 'green';
+      if (['p2_current_cluster', 'p4_hidden_positive'].includes(bucket)) return 'blue';
+      if (['p5_adjacent_supported', 'p6_social_and_keyword'].includes(bucket)) return 'amber';
       return 'slate';
     }
     function confidenceChip(conf) {
@@ -740,46 +757,103 @@ INDEX_HTML = r'''
       if (conf === 'likely_not_creator') return 'red';
       return 'slate';
     }
-
+    function labelFromSnake(s) {
+      return safe(s).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    }
+    function truncate(text, len = 120) {
+      const s = safe(text);
+      return s.length > len ? `${s.slice(0, len - 1)}…` : s;
+    }
+    function actionImplication(row) {
+      if (bool(row.signal_current_cluster)) {
+        return {
+          label: 'Current cluster publisher',
+          text: 'Reviewer decision helps confirm whether this publisher should stay in the cluster or be removed.',
+          creator: 'Keep in cluster',
+          reject: 'Remove from cluster',
+        };
+      }
+      if (bool(row.signal_hidden_positive)) {
+        return {
+          label: 'Hidden-positive candidate',
+          text: 'Reviewer decision helps decide whether this publisher should be added to the cluster.',
+          creator: 'Candidate to add',
+          reject: 'Leave out',
+        };
+      }
+      return {
+        label: 'Boundary review case',
+        text: 'Reviewer decision helps clarify how similar future publishers should be treated.',
+        creator: 'Include as creator',
+        reject: 'Exclude from creator cluster',
+      };
+    }
+    function evidenceItems(row) {
+      const items = [];
+      if (bool(row.is_social_profile_url)) items.push('Social profile URL');
+      if (bool(row.is_link_in_bio_url)) items.push('Link-in-bio');
+      if (bool(row.is_creator_storefront_url)) items.push('Creator storefront');
+      if (bool(row.signal_description_creator_terms)) items.push('Creator terms');
+      if (bool(row.signal_description_creator_commercial_terms)) items.push('Commercial creator language');
+      if (bool(row.signal_name_creator_terms)) items.push('Creator name signal');
+      if (bool(row.strong_creator_profile_flag)) items.push('Strong creator profile');
+      return items;
+    }
+    function riskItems(row) {
+      const items = [];
+      if (bool(row.creator_commercial_business_like_flag)) items.push('Commercial/business-like creator');
+      if (bool(row.signal_possible_business_entity)) items.push('Possible business/entity');
+      if (bool(row.signal_network_or_agency)) items.push('Possible agency/network');
+      if (bool(row.signal_description_business_terms)) items.push('Business terms');
+      if (bool(row.signal_description_agency_terms)) items.push('Agency terms');
+      if (bool(row.signal_description_media_terms)) items.push('Media/editorial terms');
+      if (bool(row.is_restricted_flag) || bool(row.IsRestricted)) items.push('Restricted');
+      if (bool(row.is_test_flag) || bool(row.IsTest)) items.push('Test publisher');
+      if (safe(row.BlacklistStatus)) items.push(`Blacklist: ${safe(row.BlacklistStatus)}`);
+      return items;
+    }
+    function qualityItems(row) {
+      const items = [];
+      items.push(bool(row.has_website) ? 'Website available' : 'Missing website');
+      items.push(bool(row.has_description) ? 'Description available' : 'Missing description');
+      if (safe(row.publisher_recency_band)) items.push(labelFromSnake(row.publisher_recency_band));
+      if (safe(row.publisher_status_norm || row.PublisherStatus)) items.push(`Status: ${safe(row.publisher_status_norm || row.PublisherStatus)}`);
+      if (bool(row.is_registered_flag)) items.push('Registered');
+      return items;
+    }
     async function apiGet(path) {
       const res = await fetch(path, { credentials: 'include' });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
       return res.json();
     }
-    async function apiPost(path, body) {
-      const res = await fetch(path, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        let msg = await res.text();
-        try { msg = JSON.parse(msg).detail || msg; } catch (_) {}
-        throw new Error(msg);
-      }
+    async function apiPost(path, payload) {
+      const res = await fetch(path, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
       return res.json();
     }
 
+    function Chip({ label, color = 'slate' }) {
+      return e('span', { className: `chip ${color}` }, label);
+    }
+    function MiniChip({ label, tone = '' }) {
+      return e('span', { className: `mini-chip ${tone}` }, label);
+    }
     function Topbar({ progress, reviewer }) {
+      const percentage = pct(progress);
       const total = Number(progress?.total_rows || 0);
       const reviewed = Number(progress?.reviewed_rows || 0);
-      const percent = pct(reviewed, total);
-      const remaining = Math.max(total - reviewed, 0);
-      return e('div', { className: 'topbar' },
+      const remaining = Number(progress?.remaining_rows || Math.max(total - reviewed, 0));
+      return e('header', { className: 'topbar' },
         e('div', { className: 'brand-row' },
-          e('div', { className: 'logo-orb' }, 'IR'),
+          e('div', { className: 'logo-orb' }, 'R'),
           e('div', null,
             e('div', { className: 'brand-title' }, 'Influencer / Content Creator Review'),
-            e('div', { className: 'brand-subtitle' }, `${remaining} cards left · keyboard shortcuts enabled`)
+            e('div', { className: 'brand-subtitle' }, 'Premium flashcard feedback loop for Publisher Success')
           )
         ),
         e('div', { className: 'progress-zone' },
-          e('div', { className: 'progress-label' },
-            e('span', null, `${reviewed} / ${total} reviewed`),
-            e('span', null, `${percent}% complete`)
-          ),
-          e('div', { className: 'progress-track' }, e('div', { className: 'progress-fill', style: { width: `${percent}%` } }))
+          e('div', { className: 'progress-label' }, e('span', null, `${reviewed} / ${total} reviewed`), e('span', null, `${remaining} left`)),
+          e('div', { className: 'progress-track' }, e('div', { className: 'progress-fill', style: { width: `${percentage}%` } }))
         ),
         e('div', { className: 'reviewer-badge' },
           e('div', { className: 'reviewer-label' }, 'Signed in as'),
@@ -788,39 +862,58 @@ INDEX_HTML = r'''
         )
       );
     }
-    function Chip({ label, color }) { return e('span', { className: `chip ${color || 'slate'}` }, label); }
 
     function Flashcard({ row, index, total, remaining, direction, decision }) {
-      if (!row) return null;
-      const website = normalizeUrl(row.PublisherWebSite);
-      const domain = extractDomain(row.PublisherWebSite);
       const bucket = safe(row.priority_bucket);
+      const bucketLabel = safe(row.priority_bucket_label, labelFromSnake(bucket) || 'Priority bucket');
       const conf = safe(row.review_confidence_hint);
-      const bucketLabel = safe(row.priority_bucket_label, bucket || 'Priority bucket');
-      const confLabel = safe(row.review_confidence_hint_label, conf || 'No hint');
+      const confLabel = safe(row.review_confidence_hint_label, labelFromSnake(conf) || 'Evidence hint');
+      const website = safe(row.PublisherWebSite);
+      const domain = domainFor(website);
       const description = safe(row.PublisherDescription, 'No description provided.');
-      const activeClass = decision ? `${DECISION_META[decision].className}-active` : '';
-      const evidence = safe(row.review_evidence_summary, 'No evidence summary available.');
-      const compactEvidence = evidence.length > 130 ? `${evidence.slice(0, 130)}…` : evidence;
-
+      const impact = actionImplication(row);
+      const ev = evidenceItems(row);
+      const risks = riskItems(row);
+      const quality = qualityItems(row);
+      const compactEvidence = ev.length ? ev.slice(0, 4).join(' · ') : safe(row.review_evidence_summary, 'No strong creator evidence detected.');
+      const activeClass = decision === 'creator' ? 'accept-active' : decision === 'not_creator' ? 'reject-active' : decision === 'unsure' ? 'unsure-active' : '';
       return e('div', { className: 'card-wrap' },
         e('div', { className: 'card-stack' },
-          e('div', { key: `${row.review_batch_id}-${row.PublisherKey}-${index}`, className: `flashcard ${direction === 'prev' ? 'slide-prev' : 'slide-next'} ${activeClass}` },
-            e('div', { className: 'card-kicker' }, `Card ${index + 1} of ${total} unreviewed · ${remaining} remaining`),
+          e('article', { key: `${safe(row.PublisherKey)}-${index}`, className: `flashcard ${direction === 'prev' ? 'slide-prev' : 'slide-next'} ${activeClass}` },
+            e('div', { className: 'card-topline' },
+              e('div', { className: 'card-kicker' }, `Card ${index + 1} of ${total} unreviewed · ${remaining} remaining`),
+              e('div', { className: 'impact-pill' }, e('span', { className: 'impact-dot' }), e('span', null, impact.label))
+            ),
             e('div', { className: 'chip-row' },
               e(Chip, { label: bucketLabel, color: bucketChip(bucket) }),
               e(Chip, { label: confLabel, color: confidenceChip(conf) }),
               e(Chip, { label: `Website: ${safe(row.website_type, 'unknown')}`, color: 'slate' })
             ),
             e('div', { className: 'publisher-title' }, safe(row.Publisher, 'Unknown publisher')),
-            e('div', { className: 'publisher-site' }, website ? e('a', { href: website, target: '_blank', rel: 'noopener noreferrer' }, domain || website) : 'No website provided'),
+            e('div', { className: 'publisher-site' }, website ? e('a', { href: website.startsWith('http') ? website : `https://${website}`, target: '_blank', rel: 'noopener noreferrer' }, domain || website) : 'No website provided'),
             e('div', { className: 'description' }, description),
             e('div', { className: 'stats-grid' },
-              e('div', { className: 'stat' }, e('div', { className: 'stat-label' }, 'Current type'), e('div', { className: 'stat-value' }, safe(row.current_publisher_type_group, '—'))),
-              e('div', { className: 'stat' }, e('div', { className: 'stat-label' }, 'Current subvertical'), e('div', { className: 'stat-value' }, safe(row.current_publisher_subvertical, '—'))),
+              e('div', { className: 'stat' }, e('div', { className: 'stat-label' }, 'Vertical'), e('div', { className: 'stat-value', title: safe(row.current_publisher_vertical, '—') }, safe(row.current_publisher_vertical, '—'))),
+              e('div', { className: 'stat' }, e('div', { className: 'stat-label' }, 'Current type'), e('div', { className: 'stat-value', title: safe(row.current_publisher_type_group, '—') }, safe(row.current_publisher_type_group, '—'))),
+              e('div', { className: 'stat' }, e('div', { className: 'stat-label' }, 'Subvertical'), e('div', { className: 'stat-value', title: safe(row.current_publisher_subvertical, '—') }, safe(row.current_publisher_subvertical, '—'))),
               e('div', { className: 'stat' }, e('div', { className: 'stat-label' }, 'Evidence / risk'), e('div', { className: 'stat-value' }, `${formatScore(row.creator_evidence_score)} / ${formatScore(row.non_creator_risk_score)}`))
             ),
-            e('div', { className: 'evidence-strip' }, e('span', { className: 'evidence-dot' }), e('span', null, compactEvidence))
+            e('div', { className: 'card-intel' },
+              e('div', { className: 'intel-box' },
+                e('div', { className: 'intel-label' }, 'Evidence detected'),
+                e('div', { className: 'intel-value' }, compactEvidence),
+                e('div', { className: 'mini-chipline' }, ev.slice(0, 5).map(item => e(MiniChip, { key: item, label: item, tone: 'good' })))
+              ),
+              e('div', { className: 'intel-box' },
+                e('div', { className: 'intel-label' }, 'Decision impact'),
+                e('div', { className: 'intel-value' }, impact.text),
+                e('div', { className: 'mini-chipline' },
+                  e(MiniChip, { label: `Creator: ${impact.creator}`, tone: 'good' }),
+                  e(MiniChip, { label: `Not creator: ${impact.reject}`, tone: 'risk' })
+                )
+              )
+            ),
+            risks.length > 0 && e('div', { className: 'mini-chipline', style: { marginTop: 10 } }, risks.slice(0, 4).map(item => e(MiniChip, { key: item, label: item, tone: item.toLowerCase().includes('commercial') ? 'warn' : 'risk' })))
           )
         )
       );
@@ -829,16 +922,68 @@ INDEX_HTML = r'''
     function ContextPanel({ row }) {
       const [open, setOpen] = useState(false);
       if (!row) return null;
+      const impact = actionImplication(row);
+      const ev = evidenceItems(row);
+      const risks = riskItems(row);
+      const quality = qualityItems(row);
       return e('div', { className: 'context-card' },
         e('button', { className: 'context-toggle', onClick: () => setOpen(!open) },
-          e('span', null, open ? 'Hide review context' : 'Why this card was selected'),
+          e('span', null, open ? 'Hide review context' : 'Review context · why this card was selected'),
           e('span', null, open ? '⌃' : '⌄')
         ),
         open && e('div', { className: 'context-body' },
-          e('div', { className: 'context-row' }, e('div', { className: 'context-label' }, 'Why this publisher is here'), e('div', { className: 'context-value' }, safe(row.priority_bucket_description, 'No bucket explanation available.'))),
-          e('div', { className: 'context-row' }, e('div', { className: 'context-label' }, 'Reviewer guidance'), e('div', { className: 'context-value' }, safe(row.reviewer_guidance_hint, 'Reviewer should inspect manually.'))),
-          e('div', { className: 'context-row' }, e('div', { className: 'context-label' }, 'Evidence detected'), e('div', { className: 'context-value' }, safe(row.review_evidence_summary, 'No evidence summary available.'))),
-          safe(row.reviewer_warning_message) && e('div', { className: 'warning-box' }, safe(row.reviewer_warning_message)),
+          e('div', { className: 'context-grid' },
+            e('section', { className: 'context-section' },
+              e('div', { className: 'context-label' }, 'Business implication'),
+              e('div', { className: 'context-value' }, impact.text),
+              e('div', { className: 'mini-chipline' }, e(MiniChip, { label: `Creator → ${impact.creator}`, tone: 'good' }), e(MiniChip, { label: `Not creator → ${impact.reject}`, tone: 'risk' }), e(MiniChip, { label: 'Unsure → Needs review', tone: 'warn' }))
+            ),
+            e('section', { className: 'context-section' },
+              e('div', { className: 'context-label' }, 'Current classification'),
+              e('div', { className: 'kv-grid' },
+                e('div', { className: 'kv-key' }, 'Vertical'), e('div', { className: 'kv-val' }, safe(row.current_publisher_vertical, '—')),
+                e('div', { className: 'kv-key' }, 'Subvertical'), e('div', { className: 'kv-val' }, safe(row.current_publisher_subvertical, '—')),
+                e('div', { className: 'kv-key' }, 'Type group'), e('div', { className: 'kv-val' }, safe(row.current_publisher_type_group, '—')),
+                e('div', { className: 'kv-key' }, 'Group'), e('div', { className: 'kv-val' }, safe(row.current_publisher_group, '—'))
+              )
+            ),
+            e('section', { className: 'context-section' },
+              e('div', { className: 'context-label' }, 'Positive creator evidence'),
+              e('div', { className: 'flag-cloud' }, ev.length ? ev.map(item => e(MiniChip, { key: item, label: item, tone: 'good' })) : e(MiniChip, { label: 'No strong creator evidence detected' }))
+            ),
+            e('section', { className: 'context-section' },
+              e('div', { className: 'context-label' }, 'Risk / warning lens'),
+              e('div', { className: 'flag-cloud' }, risks.length ? risks.map(item => e(MiniChip, { key: item, label: item, tone: item.toLowerCase().includes('commercial') ? 'warn' : 'risk' })) : e(MiniChip, { label: 'No major risk flags', tone: 'good' })),
+              safe(row.reviewer_warning_message) && e('div', { className: 'warning-box' }, safe(row.reviewer_warning_message))
+            ),
+            e('section', { className: 'context-section' },
+              e('div', { className: 'context-label' }, 'Data quality and activity'),
+              e('div', { className: 'flag-cloud' }, quality.map((item, i) => e(MiniChip, { key: `${item}-${i}`, label: item, tone: item.toLowerCase().includes('missing') ? 'warn' : '' })))
+            ),
+            e('section', { className: 'context-section' },
+              e('div', { className: 'context-label' }, 'Publisher profile'),
+              e('div', { className: 'kv-grid' },
+                e('div', { className: 'kv-key' }, 'Network'), e('div', { className: 'kv-val' }, safe(row.PublisherNetwork, '—')),
+                e('div', { className: 'kv-key' }, 'Location'), e('div', { className: 'kv-val' }, safe(row.PublisherSignUpLocation, '—')),
+                e('div', { className: 'kv-key' }, 'Business type'), e('div', { className: 'kv-val' }, safe(row.BusinessTypeName, '—')),
+                e('div', { className: 'kv-key' }, 'Status'), e('div', { className: 'kv-val' }, safe(row.PublisherStatus || row.publisher_status_norm, '—'))
+              )
+            ),
+            e('section', { className: 'context-section' },
+              e('div', { className: 'context-label' }, 'Traffic / promotion context'),
+              e('div', { className: 'kv-grid' },
+                e('div', { className: 'kv-key' }, 'Promotion'), e('div', { className: 'kv-val' }, safe(row.PromotionType, '—')),
+                e('div', { className: 'kv-key' }, 'Parent promo'), e('div', { className: 'kv-val' }, safe(row.ParentPromoType, '—')),
+                e('div', { className: 'kv-key' }, 'Traffic type'), e('div', { className: 'kv-val' }, safe(row.TrafficSourceType2, '—')),
+                e('div', { className: 'kv-key' }, 'Channel'), e('div', { className: 'kv-val' }, safe(row.TrafficSourceChannel, '—'))
+              )
+            ),
+            e('section', { className: 'context-section' },
+              e('div', { className: 'context-label' }, 'Why this publisher is in the queue'),
+              e('div', { className: 'context-value' }, safe(row.priority_bucket_description, 'No bucket explanation available.')),
+              e('div', { className: 'context-note' }, safe(row.reviewer_guidance_hint, 'Reviewer should inspect manually.'))
+            )
+          ),
           e('div', { className: 'context-note' }, 'These are supporting signals only. The final decision should still be based on reviewer judgement.')
         )
       );
@@ -944,11 +1089,12 @@ INDEX_HTML = r'''
         return () => window.removeEventListener('keydown', handler);
       }, [idx, totalCards, row]);
 
-      if (loading) return e('div', { className: 'app-shell' }, e('div', { className: 'empty-state' }, 'Loading review queue…'));
-      if (error) return e('div', { className: 'app-shell' }, e('div', { className: 'error-card' }, error));
-      if (!row) return e('div', { className: 'app-shell' }, e(Topbar, { progress, reviewer }), e('div', { className: 'empty-state' }, 'All publishers in this review batch have been reviewed.'));
+      if (loading) return e('div', { className: 'app-shell' }, e('div', { className: 'ambient-glow' }), e('div', { className: 'empty-state' }, 'Loading review queue…'));
+      if (error) return e('div', { className: 'app-shell' }, e('div', { className: 'ambient-glow' }), e('div', { className: 'error-card' }, error));
+      if (!row) return e('div', { className: 'app-shell' }, e('div', { className: 'ambient-glow' }), e(Topbar, { progress, reviewer }), e('div', { className: 'empty-state' }, 'All publishers in this review batch have been reviewed.'));
 
       return e('div', { className: 'app-shell' },
+        e('div', { className: 'ambient-glow' }),
         e(Topbar, { progress, reviewer }),
         e('main', { className: 'main-view' },
           e('div', { className: 'stage' },
