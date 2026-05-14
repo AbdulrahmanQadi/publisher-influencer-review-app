@@ -631,6 +631,63 @@ INDEX_HTML = r'''
     @keyframes drawerOpen { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
     .context-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
     .context-section { border: 1px solid rgba(148,163,184,.12); background: rgba(10, 23, 41, .48); border-radius: 18px; padding: 14px; }
+    .identifier-strip {
+      grid-column: 1 / -1;
+      border: 1px solid rgba(96, 165, 250, 0.18);
+      background:
+        radial-gradient(circle at 4% 10%, rgba(96,165,250,.14), transparent 36%),
+        rgba(10, 23, 41, .54);
+      border-radius: 20px;
+      padding: 14px;
+    }
+    
+    .identifier-title {
+      color: #93C5FD;
+      font-size: .68rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      font-weight: 950;
+      margin-bottom: 10px;
+    }
+    
+    .identifier-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    
+    .identifier-pill {
+      flex: 1;
+      min-width: 220px;
+      border: 1px solid rgba(148,163,184,.15);
+      background: rgba(6, 14, 26, .62);
+      border-radius: 16px;
+      padding: 11px 12px;
+    }
+    
+    .identifier-label {
+      color: #91A9C9;
+      font-size: .68rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      margin-bottom: 5px;
+    }
+    
+    .identifier-value {
+      color: #F8FAFC;
+      font-size: .98rem;
+      font-weight: 950;
+      font-variant-numeric: tabular-nums;
+      overflow-wrap: anywhere;
+    }
+    
+    .identifier-hint {
+      margin-top: 9px;
+      color: #A9BAD4;
+      font-size: .78rem;
+      line-height: 1.4;
+    }
     .context-label { color: #93C5FD; font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 950; margin-bottom: 8px; }
     .context-value { color: #F8FAFC; line-height: 1.45; font-size: .91rem; }
     .kv-grid { display: grid; grid-template-columns: 120px 1fr; gap: 6px 10px; color: #EAF2FF; font-size: .86rem; }
@@ -983,22 +1040,48 @@ INDEX_HTML = r'''
     function ContextPanel({ row }) {
       const [open, setOpen] = useState(false);
       if (!row) return null;
+    
       const impact = actionImplication(row);
       const ev = evidenceItems(row);
       const risks = riskItems(row);
       const quality = qualityItems(row);
+    
       return e('div', { className: 'context-card' },
         e('button', { className: 'context-toggle', onClick: () => setOpen(!open) },
           e('span', null, open ? 'Hide supporting context' : 'Supporting context'),
           e('span', null, open ? '⌃' : '⌄')
         ),
+    
         open && e('div', { className: 'context-body' },
           e('div', { className: 'context-grid' },
+    
+            e('section', { className: 'identifier-strip' },
+              e('div', { className: 'identifier-title' }, 'Publisher identifiers'),
+              e('div', { className: 'identifier-row' },
+                e('div', { className: 'identifier-pill' },
+                  e('div', { className: 'identifier-label' }, 'Publisher ID'),
+                  e('div', { className: 'identifier-value' }, safe(row.PublisherID, '—'))
+                ),
+                e('div', { className: 'identifier-pill' },
+                  e('div', { className: 'identifier-label' }, 'Publisher Key'),
+                  e('div', { className: 'identifier-value' }, safe(row.PublisherKey, '—'))
+                )
+              ),
+              e('div', { className: 'identifier-hint' },
+                'Use these IDs to cross-check the publisher in internal tools if the reviewer needs additional confirmation.'
+              )
+            ),
+    
             e('section', { className: 'context-section' },
               e('div', { className: 'context-label' }, 'Business implication'),
               e('div', { className: 'context-value' }, impact.text),
-              e('div', { className: 'mini-chipline' }, e(MiniChip, { label: `Creator → ${impact.creator}`, tone: 'good' }), e(MiniChip, { label: `Not creator → ${impact.reject}`, tone: 'risk' }), e(MiniChip, { label: 'Unsure → Needs review', tone: 'warn' }))
+              e('div', { className: 'mini-chipline' },
+                e(MiniChip, { label: `Creator → ${impact.creator}`, tone: 'good' }),
+                e(MiniChip, { label: `Not creator → ${impact.reject}`, tone: 'risk' }),
+                e(MiniChip, { label: 'Unsure → Needs review', tone: 'warn' })
+              )
             ),
+    
             e('section', { className: 'context-section' },
               e('div', { className: 'context-label' }, 'Current classification'),
               e('div', { className: 'kv-grid' },
@@ -1008,25 +1091,46 @@ INDEX_HTML = r'''
                 e('div', { className: 'kv-key' }, 'Group'), e('div', { className: 'kv-val' }, safe(row.current_publisher_group, '—'))
               )
             ),
+    
             e('section', { className: 'context-section' },
               e('div', { className: 'context-label' }, 'Positive creator evidence'),
               e('div', { className: 'flag-cloud' },
                 e(MiniChip, { label: `Evidence score: ${formatScore(row.creator_evidence_score)}`, tone: 'good' }),
-                ev.length ? ev.map(item => e(MiniChip, { key: item, label: item, tone: 'good' })) : e(MiniChip, { label: 'No strong creator evidence detected' })
+                ev.length
+                  ? ev.map(item => e(MiniChip, { key: item, label: item, tone: 'good' }))
+                  : e(MiniChip, { label: 'No strong creator evidence detected' })
               )
             ),
+    
             e('section', { className: 'context-section' },
               e('div', { className: 'context-label' }, 'Risk / warning lens'),
               e('div', { className: 'flag-cloud' },
-                e(MiniChip, { label: `Risk score: ${formatScore(row.non_creator_risk_score)}`, tone: Number(row.non_creator_risk_score || 0) >= 2 ? 'warn' : 'good' }),
-                risks.length ? risks.map(item => e(MiniChip, { key: item, label: item, tone: item.toLowerCase().includes('commercial') ? 'warn' : 'risk' })) : e(MiniChip, { label: 'No major risk flags', tone: 'good' })
+                e(MiniChip, {
+                  label: `Risk score: ${formatScore(row.non_creator_risk_score)}`,
+                  tone: Number(row.non_creator_risk_score || 0) >= 2 ? 'warn' : 'good'
+                }),
+                risks.length
+                  ? risks.map(item => e(MiniChip, {
+                      key: item,
+                      label: item,
+                      tone: item.toLowerCase().includes('commercial') ? 'warn' : 'risk'
+                    }))
+                  : e(MiniChip, { label: 'No major risk flags', tone: 'good' })
               ),
               safe(row.reviewer_warning_message) && e('div', { className: 'warning-box' }, safe(row.reviewer_warning_message))
             ),
+    
             e('section', { className: 'context-section' },
               e('div', { className: 'context-label' }, 'Data quality and activity'),
-              e('div', { className: 'flag-cloud' }, quality.map((item, i) => e(MiniChip, { key: `${item}-${i}`, label: item, tone: item.toLowerCase().includes('missing') ? 'warn' : '' })))
+              e('div', { className: 'flag-cloud' },
+                quality.map((item, i) => e(MiniChip, {
+                  key: `${item}-${i}`,
+                  label: item,
+                  tone: item.toLowerCase().includes('missing') ? 'warn' : ''
+                }))
+              )
             ),
+    
             e('section', { className: 'context-section' },
               e('div', { className: 'context-label' }, 'Publisher profile'),
               e('div', { className: 'kv-grid' },
@@ -1036,6 +1140,7 @@ INDEX_HTML = r'''
                 e('div', { className: 'kv-key' }, 'Status'), e('div', { className: 'kv-val' }, safe(row.PublisherStatus || row.publisher_status_norm, '—'))
               )
             ),
+    
             e('section', { className: 'context-section' },
               e('div', { className: 'context-label' }, 'Traffic / promotion context'),
               e('div', { className: 'kv-grid' },
@@ -1045,13 +1150,17 @@ INDEX_HTML = r'''
                 e('div', { className: 'kv-key' }, 'Channel'), e('div', { className: 'kv-val' }, safe(row.TrafficSourceChannel, '—'))
               )
             ),
+    
             e('section', { className: 'context-section' },
               e('div', { className: 'context-label' }, 'Why this publisher is in the queue'),
               e('div', { className: 'context-value' }, safe(row.priority_bucket_description, 'No bucket explanation available.')),
               e('div', { className: 'context-note' }, safe(row.reviewer_guidance_hint, 'Reviewer should inspect manually.'))
             )
           ),
-          e('div', { className: 'context-note' }, 'These are supporting signals only. Please use business judgement as the final source of truth.')
+    
+          e('div', { className: 'context-note' },
+            'These are supporting signals only. Please use business judgement as the final source of truth.'
+          )
         )
       );
     }
